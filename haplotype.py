@@ -116,12 +116,12 @@ class pileup():
             altN = 0
             for b, n in var_count.items():
                 log('looking at', pos, b, n, self.depth(pos))
-                if (n / self.depth(pos) > 0.2 and n / self.depth(pos) < 0.8) and (n > 3 and self.depth(pos) - n > 3):
+                if (n / self.depth(pos) > 0.11 and n / self.depth(pos) < 0.89) and (n >= 3 and self.depth(pos) - n >= 3):
                     log('good')
                     good += 1
                 altN += n
             refN = self.depth(pos) - altN
-            if (refN / self.depth(pos) > 0.2 and refN / self.depth(pos) < 0.8) and (refN > 3 and self.depth(pos) - refN > 3):
+            if (refN / self.depth(pos) > 0.11 and refN / self.depth(pos) < 0.89) and (refN >= 3 and self.depth(pos) - refN >= 3):
                 log('ref', refN, 'good')
                 good += 1
                 
@@ -177,12 +177,12 @@ class pileup():
         self.smallClusters = sorted(self.smallClusters, key=operator.attrgetter('nvar'))
         self.largeClusters = []
         dashed = []
-        log('Basic small clusters:')
+        #log('Basic small clusters:')
+        #for c in self.smallClusters:
+            #log(c)
+            #log(c.members)
         for c in self.smallClusters:
-            log(c)
-            log(c.members)
-        for c in self.smallClusters:
-            if c.nvar > 10:
+            if c.nvar > 0.15 * len(self.pos_var_count):
                 break
             if len(c.pos_allele) == 0:
                 dashed.append(c)
@@ -196,7 +196,7 @@ class pileup():
                     C.merge(c)
                     merged = True
                     break
-                elif len(c.pos_allele) > 3 and len(C.pos_allele) > 3 and C.distance(c) <= 1:
+                elif len(c.pos_allele) > 3 and len(C.pos_allele) > 3 and C.distance(c) <= max(1, 0.05 * len(C.pos_allele)):  # THRESHOLD
                     C.merge(c)
                     merged = True
                     break
@@ -212,18 +212,18 @@ class pileup():
         if len(self.largeClusters) > 0:
             self.largeClusters[0].selfCheck()
             for read in self.largeClusters[0].members:
-                if len(read.ori_var)/(read.tgt_end - read.tgt_start) < 0.001:
+                if len(read.ori_var)/(read.tgt_end - read.tgt_start) < 0.002:
                     C1[read.name] = self.ovlp[read.name]
                 else:
                     log('Discarded', read, 'because originally too many snps', len(read.ori_var), 'with overlapping length', read.tgt_end - read.tgt_start)
         dash = {}
         for c in dashed:
             for read in c.members:
-                if len(read.ori_var)/(read.tgt_end - read.tgt_start) < 0.001: 
+                if len(read.ori_var)/(read.tgt_end - read.tgt_start) < 0.002: 
                     dash[read.name] = 0
                 else:
                     log('Discarded', read, 'because originally too many snps', len(read.ori_var), 'with overlapping length', read.tgt_end - read.tgt_start)
-
+        log('Final remaining reads for target', self.targetName, C1, dash)
         return C1, dash
 
     def getTrueHaps(self, outputCov):
@@ -257,7 +257,7 @@ class Cluster(object):
         self.members = set(members)
         self.diff = {}
         self.diff_reads = defaultdict(set)
-    
+
     def merge(self, cluster):
         assert isinstance(cluster, Cluster)
         for pos, allele in cluster.pos_allele.items():
@@ -310,8 +310,9 @@ class Cluster(object):
     def selfCheck(self):
         toRemove = set()
         for pos, readSet in self.diff_reads.items():
-            if len(readSet) / self.inClusterDepth(pos) > 0.1 or len(readSet) / self.inClusterDepth(pos) < 0.9:
+            if len(readSet) / self.inClusterDepth(pos) > 0.25 and len(readSet) / self.inClusterDepth(pos) < 0.75:
                 toRemove = toRemove.union(readSet)
+                log('Removing at selfcheck where depth is', self.inClusterDepth(pos), readSet)
         
         self.members = self.members.difference(toRemove)
 
@@ -319,7 +320,7 @@ class Cluster(object):
         return 'Cluster with '+str(self.nvar)+' variants; with alleles:'+str(self.pos_allele)+'; with %d members'%(len(self.members))+'; with allowed difference at: '+str(self.diff)+'; SNP: '+str(self.pos_var)      
 
 def align(fasta, t):
-    cmd = 'minimap2 -c -x asm20 -DP --no-long-join --cs -n500 -t %d %s %s | sort -k8n -k6'%(t, fasta, fasta)
+    cmd = 'minimap2 -c -x asm20 -DP --no-long-join --cs -n500 -r100 -t %d %s %s | sort -k8n -k6'%(t, fasta, fasta)
     sys.stderr.write('minimap2 cmd: %s\n'%cmd)
     sys.stderr.write('Aligning...\n')
     paf_run = subprocess.Popen(cmd, shell = True, stderr = subprocess.PIPE, stdout = subprocess.PIPE)
@@ -383,8 +384,8 @@ def variantCall(targetName, paflines, outputCov):
             if field[:5] == 'cg:Z:':
                 cigar1 = field[5:]
         target_coord = target_start
-        if (query_end - query_start) / query_length <= 0.15: # THRESHOLD: minimum ovlp length to consider a query for variant calling
-            continue
+        #if (query_end - query_start) / query_length <= 0.15: # THRESHOLD: minimum ovlp length to consider a query for variant calling
+        #    continue
         if query_dir == '+':
             query_coord = 0
         else:
@@ -530,7 +531,6 @@ def variantCall(targetName, paflines, outputCov):
             elif query_info[4] <= 20 and query_info[6] - query_info[5] <= 20 and (query_name in C1 or query_name in dash):
                 contained.add(query_name)
             continue
-
         if query_name in C1:
             L.append(C1[query_name])
             L.append('GREEN')
@@ -568,23 +568,24 @@ def selectOvlp(Llines):
 
     Llinesout = []
     seenPair = set()
+    log('start to log conns')
     for src, info in node2node.items():
         if len(info) == 1:
             continue
         info = sorted(list(info), reverse = True)
         maxovlp = info[0][0]
-        minovlp = maxovlp * 0.5 # THRESHOLD, for selecting the best ovlpped connections
+        #minovlp = maxovlp * 0.5 # THRESHOLD, for selecting the best ovlpped connections
         good = []
         potential = []
         bad = []
         dash = []
         for conn in info:
             log(conn)
-            if conn[3] >= 4 and ((conn[1] >= 0.5 and conn[2] >= 0.50) or conn[0] > 4000): # Before was 6000, for ragoo based, adjusted to 4000
+            if conn[3] >= 4 and ((conn[1] >= 0.5 and conn[2] >= 0.50) or conn[0] > 5000): # Before was 6000, for ragoo based, adjusted to 4000
                 good.append(conn)
-            elif conn[3] > 0 and ((conn[1] >= 0.50 and conn[2] >= 0.50) or conn[0] > 4000):
+            elif conn[3] > 0 and ((conn[1] >= 0.50 and conn[2] >= 0.50) or conn[0] > 5000):
                 potential.append(conn)
-            elif conn[3] == 0 and ((conn[1] >= 0.4 and conn[2] >= 0.4) or conn[0] > 4000):
+            elif conn[3] == 0 and ((conn[1] >= 0.4 and conn[2] >= 0.4) or conn[0] > 5000):
                 dash.append(conn)
                  
             else:
@@ -595,39 +596,39 @@ def selectOvlp(Llines):
         connected = []
         nB, nE, t = 0, 0, 0
 
-        while ( nB < 4 or nE < 4 ) and t < len(good):
+        while ( nB < 8 or nE < 8 ) and t < len(good):
             if good[t][5] == 'E':
 
-                if nE < 4:
+                if nE < 8:
                     nE += 1
                     connected.append(good[t])
             if good[t][5] == 'B':
 
-                if nB < 4:
+                if nB < 8:
                     nB += 1
                     connected.append(good[t])
             t += 1
 
         t = 0
-        while ( nB < 5 or nE < 5 ) and t < len(potential):
+        while ( nB < 8 or nE < 8 ) and t < len(potential):
             if potential[t][5] == 'E':
-                if nE < 5:
+                if nE < 8:
                     nE += 1
                     connected.append(potential[t])
             if potential[t][5] == 'B':
-                if nB < 5:
+                if nB < 8:
                     nB += 1
                     connected.append(potential[t])
             t += 1
 
         t = 0
-        while ( nB < 5 or nE < 5 ) and t < len(dash):
+        while ( nB < 8 or nE < 8 ) and t < len(dash):
             if dash[t][5] == 'E':
-                if nE < 5:
+                if nE < 8:
                     nE += 1
                     connected.append(dash[t])
             if dash[t][5] == 'B':
-                if nB < 5:
+                if nB < 8:
                     nB += 1
                     connected.append(dash[t])
             t += 1   
@@ -887,7 +888,7 @@ def main():
         log('Using given paf file rather than align again')
         paflines = open(args.paf, 'r').read().split('\n')[:-1]
     blocks = split_jobs(paflines)
-    
+    log('Totally', len(blocks), 'pileups to run')
     if args.input_variant != None:
         log('Sorry input_variant function is not finished yet...')
         exit()

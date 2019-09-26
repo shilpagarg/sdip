@@ -3,7 +3,7 @@ import networkx as nx
 from findGFAPath import Graph, Node
 
 '''
-Usage: python this.py GFA listOUT regionLength(bp)
+Usage: python this.py GFA regionLength(bp)
 '''
 import networkx as nx
 import sys
@@ -87,10 +87,6 @@ def divide(graph, out):
     disconnected = bfs_connected_components(graph)
     print(len(disconnected))
     #log('Totally', len(disconnected), 'disconnected connected components')
-    o = open(out, 'w')
-    for chain in disconnected:
-        o.write(' '.join(chain) + '\n')
-    o.close()
     starts = [i[-1] for i in disconnected]
     return starts
 
