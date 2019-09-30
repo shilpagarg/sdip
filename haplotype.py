@@ -320,7 +320,7 @@ class Cluster(object):
         return 'Cluster with '+str(self.nvar)+' variants; with alleles:'+str(self.pos_allele)+'; with %d members'%(len(self.members))+'; with allowed difference at: '+str(self.diff)+'; SNP: '+str(self.pos_var)      
 
 def align(fasta, t):
-    cmd = 'minimap2 -c -x asm20 -DP --no-long-join --cs -n500 -r100 -t %d %s %s | sort -k8n -k6'%(t, fasta, fasta)
+    cmd = 'minimap2 -c -x asm20 -DP --no-long-join --cs -n500 -t %d %s %s | sort -k8n -k6'%(t, fasta, fasta)
     sys.stderr.write('minimap2 cmd: %s\n'%cmd)
     sys.stderr.write('Aligning...\n')
     paf_run = subprocess.Popen(cmd, shell = True, stderr = subprocess.PIPE, stdout = subprocess.PIPE)
