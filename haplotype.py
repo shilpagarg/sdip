@@ -1,4 +1,5 @@
 import sys
+import re
 from collections import defaultdict, OrderedDict
 import argparse
 from multiprocessing import Pool
@@ -361,6 +362,15 @@ def hasClipping(target_start, target_end, target_length, query_start, query_end,
     if target_start > 20 and target_length - target_end > 20 and query_start > 20 and query_length - query_end > 20:
         return True
 
+def swapCigarReference(cigar_string):
+    ops = re.findall(r'[0-9]+[MIDNSHP=X]', cigar_string)
+    ops_parsed = [(int(op[:-1]), op[-1]) for op in ops if op[-1] in ['M', 'I', 'D']]    
+    ops_unsupported = [(int(op[:-1]), op[-1]) for op in ops if not op[-1] in ['M', 'I', 'D']]
+    assert len(ops_unsupported) == 0
+    complement = {'M': 'M', 'D': 'I', 'I': 'D'}
+    swapped_cigar = "".join([str(length) + complement.get(operation) for (length, operation) in ops_parsed])
+    return swapped_cigar
+
 def variantCall(targetName, paflines, outputCov):
     query_record = dict()
     target_length = int(paflines[0].split('\t')[6])
@@ -378,7 +388,8 @@ def variantCall(targetName, paflines, outputCov):
         target_start = int(tokens[7])
         target_end = int(tokens[8])
         aln_block_length = int(tokens[10])
-        for field in tokens[10:]:
+        tags = tokens[12:]
+        for field in tags:
             if field[:5] == 'cs:Z:':
                 cigar2 = field[5:]
             if field[:5] == 'cg:Z:':
@@ -400,9 +411,12 @@ def variantCall(targetName, paflines, outputCov):
         read = Read(query_name, query_length, target_start, target_end, snp_coord, del_region)
 
         if caller.add_read(read):
-            query_record[query_name] = [0, target_start, target_end, 
-                                    target_length, query_start, query_end, 
-                                    query_length, query_dir, target_end - target_start, cigar1]
+            #query_record[query_name] = [0, target_start, target_end, 
+            #                        target_length, query_start, query_end, 
+            #                        query_length, query_dir, target_end - target_start, cigar1]
+            query_record[query_name] = {"target_start": target_start, "target_end": target_end, "target_length": target_length, 
+                                        "query_start": query_start, "query_end": query_end, "query_length": query_length,
+                                        "query_dir": query_dir, "overlap": target_end - target_start, "cigar": cigar1}
 
     C1, dash = caller.getTrueHaps(outputCov)
     Llines = []
@@ -412,123 +426,160 @@ def variantCall(targetName, paflines, outputCov):
 
         # Set a small window (20bp) for suffix prefix starting/end pos
         
-        if query_info[4] <= 20 and query_info[6] - query_info[5] > 20 \
-           and query_info[1] > 20 and query_info[3] - query_info[2] <= 20 \
-           and query_info[7] == '+':
-            # target-suffix <==> prefix-query '+'
-            #L = [target_name, '+', query_name, 
-            #     query_info[7], str(query_info[9])]
-            L = [target_name, query_info[3], query_info[1], query_info[2], '+', 
-                 query_name, query_info[6], query_info[4], query_info[5], query_info[7], 
-                 query_info[8], str(query_info[9])]
-        elif query_info[4] <= 20 and query_info[5] == query_info[6] \
-           and query_info[1] > 20 and query_info[3] - query_info[2] <= 20 \
-           and query_info[7] == '+':
-            # target-suffix <==> prefix-query '+'
-            #L = [target_name, '+', query_name, 
-            #     query_info[7], str(query_info[9])]
-            L = [target_name, query_info[3], query_info[1], query_info[2], '+', 
-                 query_name, query_info[6], query_info[4], query_info[5], query_info[7], 
-                 query_info[8], str(query_info[9])]
-        elif query_info[4] <= 20 and query_info[6] - query_info[5] > 20 \
-           and query_info[1] == 0 and query_info[3] - query_info[2] <= 20 \
-           and query_info[7] == '+':
-            # target-suffix <==> prefix-query '+'
-            #L = [target_name, '+', query_name, 
-            #     query_info[7], str(query_info[9])]
-            L = [target_name, query_info[3], query_info[1], query_info[2], '+', 
-                 query_name, query_info[6], query_info[4], query_info[5], query_info[7], 
-                 query_info[8], str(query_info[9])]
-        
+        #           ------ Query
+        # Target -------
+        if query_info["query_start"] <= 20 and query_info["query_length"] - query_info["query_end"] > 20 \
+           and query_info["target_start"] > 20 and query_info["target_length"] - query_info["target_end"] <= 20 \
+           and query_info["query_dir"] == '+':
+            unmapped_query_bases = query_info["query_start"]
+            unmapped_target_bases = query_info["target_length"] - query_info["target_end"]
+            new_cigar = unmapped_query_bases * 'I' + query_info["cigar"] + unmapped_target_bases * 'D'
+            L = [target_name, query_info["target_length"], query_info["target_start"], query_info["target_end"], '+', 
+                 query_name, query_info["query_length"], query_info["query_start"], query_info["query_end"], '+', 
+                 query_info["overlap"], new_cigar]
+        elif query_info["query_start"] <= 20 and query_info["query_end"] == query_info["query_length"] \
+           and query_info["target_start"] > 20 and query_info["target_length"] - query_info["target_end"] <= 20 \
+           and query_info["query_dir"] == '+':
+            unmapped_query_bases = query_info["query_start"]
+            unmapped_target_bases = query_info["target_length"] - query_info["target_end"]
+            new_cigar = unmapped_query_bases * 'I' + query_info["cigar"] + unmapped_target_bases * 'D'
+            L = [target_name, query_info["target_length"], query_info["target_start"], query_info["target_end"], '+', 
+                 query_name, query_info["query_length"], query_info["query_start"], query_info["query_end"], '+', 
+                 query_info["overlap"], new_cigar]
+        elif query_info["query_start"] <= 20 and query_info["query_length"] - query_info["query_end"] > 20 \
+           and query_info["target_start"] == 0 and query_info["target_length"] - query_info["target_end"] <= 20 \
+           and query_info["query_dir"] == '+':
+            unmapped_query_bases = query_info["query_start"]
+            unmapped_target_bases = query_info["target_length"] - query_info["target_end"]
+            new_cigar = unmapped_query_bases * 'I' + query_info["cigar"] + unmapped_target_bases * 'D'
+            L = [target_name, query_info["target_length"], query_info["target_start"], query_info["target_end"], '+', 
+                 query_name, query_info["query_length"], query_info["query_start"], query_info["query_end"], '+', 
+                 query_info["overlap"], new_cigar]
 
-        elif query_info[1] <= 20 and query_info[3] - query_info[2] > 20\
-             and query_info[4] > 20 and query_info[6] - query_info[5] <= 20 \
-             and query_info[7] == '+':
-            # query-suffix '+' <==> prefix-target
-            #L = [query_name, query_info[7], target_name, 
-            #     '+', str(query_info[9])]
-            L = [query_name, query_info[6], query_info[4], query_info[5], query_info[7], 
-                 target_name, query_info[3], query_info[1], query_info[2], '+', 
-                 query_info[8], str(query_info[9])]
-        elif query_info[1] <= 20 and query_info[2] == query_info[3] \
-             and query_info[4] > 20 and query_info[6] - query_info[5] <= 20 \
-             and query_info[7] == '+':
-            # query-suffix '+' <==> prefix-target
-            #L = [query_name, query_info[7], target_name, 
-            #     '+', str(query_info[9])]
-            L = [query_name, query_info[6], query_info[4], query_info[5], query_info[7], 
-                 target_name, query_info[3], query_info[1], query_info[2], '+', 
-                 query_info[8], str(query_info[9])]
-        elif query_info[1] <= 20 and query_info[3] - query_info[2] > 20 \
-             and query_info[4] == 0 and query_info[6] - query_info[5] <= 20 \
-             and query_info[7] == '+':
-            # query-suffix '+' <==> prefix-target
-            #L = [query_name, query_info[7], target_name, 
-            #     '+', str(query_info[9])]
-            L = [query_name, query_info[6], query_info[4], query_info[5], query_info[7], 
-                 target_name, query_info[3], query_info[1], query_info[2], '+', 
-                 query_info[8], str(query_info[9])]
+        #          ------- Target
+        # Query ------
+        elif query_info["target_start"] <= 20 and query_info["target_length"] - query_info["target_end"] > 20\
+             and query_info["query_start"] > 20 and query_info["query_length"] - query_info["query_end"] <= 20 \
+             and query_info["query_dir"] == '+':
+            unmapped_query_bases = query_info["query_length"] - query_info["query_end"]
+            unmapped_target_bases = query_info["target_start"]
+            """
+            CIGAR string expresses changes with target as reference
+            GFA output contains edge from the end of query to the start of target
+            CIGAR in GFA must express changes with query as reference (see https://github.com/GFA-spec/GFA-spec/blob/master/GFA1.md#l-link-line)
+            Deletions must be replaced by insertions and vice versa
+            """
+            new_cigar = unmapped_target_bases * 'I' + swapCigarReference(query_info["cigar"]) + unmapped_query_bases * 'D'
+            L = [query_name, query_info["query_length"], query_info["query_start"], query_info["query_end"], '+', 
+                 target_name, query_info["target_length"], query_info["target_start"], query_info["target_end"], '+', 
+                 query_info["overlap"], new_cigar]
+        elif query_info["target_start"] <= 20 and query_info["target_end"] == query_info["target_length"] \
+             and query_info["query_start"] > 20 and query_info["query_length"] - query_info["query_end"] <= 20 \
+             and query_info["query_dir"] == '+':
+            unmapped_query_bases = query_info["query_length"] - query_info["query_end"]
+            unmapped_target_bases = query_info["target_start"]
+            """
+            CIGAR string expresses changes with target as reference
+            GFA output contains edge from the end of query to the start of target
+            CIGAR in GFA must express changes with query as reference (see https://github.com/GFA-spec/GFA-spec/blob/master/GFA1.md#l-link-line)
+            Deletions must be replaced by insertions and vice versa
+            """
+            new_cigar = unmapped_target_bases * 'I' + swapCigarReference(query_info["cigar"]) + unmapped_query_bases * 'D'
+            L = [query_name, query_info["query_length"], query_info["query_start"], query_info["query_end"], '+', 
+                 target_name, query_info["target_length"], query_info["target_start"], query_info["target_end"], '+', 
+                 query_info["overlap"], new_cigar]
+        elif query_info["target_start"] <= 20 and query_info["target_length"] - query_info["target_end"] > 20 \
+             and query_info["query_start"] == 0 and query_info["query_length"] - query_info["query_end"] <= 20 \
+             and query_info["query_dir"] == '+':
+            unmapped_query_bases = query_info["query_length"] - query_info["query_end"]
+            unmapped_target_bases = query_info["target_start"]
+            """
+            CIGAR string expresses changes with target as reference
+            GFA output contains edge from the end of query to the start of target
+            CIGAR in GFA must express changes with query as reference (see https://github.com/GFA-spec/GFA-spec/blob/master/GFA1.md#l-link-line)
+            Deletions must be replaced by insertions and vice versa
+            """
+            new_cigar = unmapped_target_bases * 'I' + swapCigarReference(query_info["cigar"]) + unmapped_query_bases * 'D'
+            L = [query_name, query_info["query_length"], query_info["query_start"], query_info["query_end"], '+', 
+                 target_name, query_info["target_length"], query_info["target_start"], query_info["target_end"], '+', 
+                 query_info["overlap"], new_cigar]
 
-        elif query_info[1] <= 20 and query_info[3] - query_info[2] > 20 \
-             and query_info[4] <= 20 and query_info[6] - query_info[5] > 20 \
-             and query_info[7] == '-':
-            # query-suffix '-' <==> prefix-target
-            #L = [query_name, query_info[7], target_name, 
-            #    '+', str(query_info[9])]
-            L = [query_name, query_info[6], query_info[4], query_info[5], query_info[7], 
-                 target_name, query_info[3], query_info[1], query_info[2], '+', 
-                 query_info[8], str(query_info[9])]
-        elif query_info[1] <= 20 and query_info[2] == query_info[3] \
-             and query_info[4] <= 20 and query_info[6] - query_info[5] > 20 \
-             and query_info[7] == '-':
-            # query-suffix '-' <==> prefix-target
-            #L = [query_name, query_info[7], target_name, 
-            #     '+', str(query_info[9])]
-            L = [query_name, query_info[6], query_info[4], query_info[5], query_info[7], 
-                 target_name, query_info[3], query_info[1], query_info[2], '+', 
-                 query_info[8], str(query_info[9])]
-        elif query_info[1] <= 20 and query_info[3] - query_info[2] > 20 \
-             and query_info[4] <= 20 and query_info[5] == query_info[6] \
-             and query_info[7] == '-':
-            # query-suffix '-' <==> prefix-target
-            #L = [query_name, query_info[7], target_name, 
-            #    '+', str(query_info[9])]
-            L = [query_name, query_info[6], query_info[4], query_info[5], query_info[7], 
-                 target_name, query_info[3], query_info[1], query_info[2], '+', 
-                 query_info[8], str(query_info[9])]
+        # Target (+) --------
+        # Query (-)  ------
+        elif query_info["target_start"] <= 20 and query_info["target_length"] - query_info["target_end"] > 20 \
+             and query_info["query_start"] <= 20 and query_info["query_length"] - query_info["query_end"] > 20 \
+             and query_info["query_dir"] == '-':
+            unmapped_query_bases = query_info["query_start"]
+            unmapped_target_bases = query_info["target_start"]
+            # CIGAR string expresses changes with target as reference
+            # GFA output contains edge from the end of query to the start of target
+            # CIGAR in GFA must express changes with query as reference (see https://github.com/GFA-spec/GFA-spec/blob/master/GFA1.md#l-link-line)
+            # Deletions must be replaced by insertions and vice versa
+            new_cigar = unmapped_target_bases * 'I' + swapCigarReference(query_info["cigar"]) + unmapped_query_bases * 'D'
+            L = [query_name, query_info["query_length"], query_info["query_start"], query_info["query_end"], '-', 
+                 target_name, query_info["target_length"], query_info["target_start"], query_info["target_end"], '+', 
+                 query_info["overlap"], new_cigar]
+        elif query_info["target_start"] <= 20 and query_info["target_end"] == query_info["target_length"] \
+             and query_info["query_start"] <= 20 and query_info["query_length"] - query_info["query_end"] > 20 \
+             and query_info["query_dir"] == '-':
+            unmapped_query_bases = query_info["query_start"]
+            unmapped_target_bases = query_info["target_start"]
+            # CIGAR string expresses changes with target as reference
+            # GFA output contains edge from the end of query to the start of target
+            # CIGAR in GFA must express changes with query as reference (see https://github.com/GFA-spec/GFA-spec/blob/master/GFA1.md#l-link-line)
+            # Deletions must be replaced by insertions and vice versa
+            new_cigar = unmapped_target_bases * 'I' + swapCigarReference(query_info["cigar"]) + unmapped_query_bases * 'D'
+            L = [query_name, query_info["query_length"], query_info["query_start"], query_info["query_end"], '-', 
+                 target_name, query_info["target_length"], query_info["target_start"], query_info["target_end"], '+', 
+                 query_info["overlap"], new_cigar]
+        elif query_info["target_start"] <= 20 and query_info["target_length"] - query_info["target_end"] > 20 \
+             and query_info["query_start"] <= 20 and query_info["query_end"] == query_info["query_length"] \
+             and query_info["query_dir"] == '-':
+            unmapped_query_bases = query_info["query_start"]
+            unmapped_target_bases = query_info["target_start"]
+            # CIGAR string expresses changes with target as reference
+            # GFA output contains edge from the end of query to the start of target
+            # CIGAR in GFA must express changes with query as reference (see https://github.com/GFA-spec/GFA-spec/blob/master/GFA1.md#l-link-line)
+            # Deletions must be replaced by insertions and vice versa
+            new_cigar = unmapped_target_bases * 'I' + swapCigarReference(query_info["cigar"]) + unmapped_query_bases * 'D'
+            L = [query_name, query_info["query_length"], query_info["query_start"], query_info["query_end"], '-', 
+                 target_name, query_info["target_length"], query_info["target_start"], query_info["target_end"], '+', 
+                 query_info["overlap"], new_cigar]
 
-        elif query_info[4] > 20 and query_info[6] - query_info[5] <= 20 \
-             and query_info[1] > 20 and query_info[3] - query_info[2] <= 20 \
-             and query_info[7] == '-':
-            # target-suffix  <==> prefix-query '-'
-            #L = [target_name, '+', query_name, 
-            #     query_info[7], str(query_info[9])]
-            L = [target_name, query_info[3], query_info[1], query_info[2], '+', 
-                 query_name, query_info[6], query_info[4], query_info[5], query_info[7], 
-                 query_info[8], str(query_info[9])]
-        elif query_info[4] == 0 and query_info[6] - query_info[5] <= 20 \
-             and query_info[1] > 20 and query_info[3] - query_info[2] <= 20 \
-             and query_info[7] == '-':
-            # target-suffix  <==> prefix-query '-'
-            #L = [target_name, '+', query_name, 
-            #     query_info[7], str(query_info[9])]
-            L = [target_name, query_info[3], query_info[1], query_info[2], '+', 
-                 query_name, query_info[6], query_info[4], query_info[5], query_info[7], 
-                 query_info[8], str(query_info[9])]
-        elif query_info[4] > 20 and query_info[6] - query_info[5] <= 20 \
-             and query_info[1] == 0 and query_info[3] - query_info[2] <= 20 \
-             and query_info[7] == '-':
-            # target-suffix  <==> prefix-query '-'
-            #L = [target_name, '+', query_name, 
-            #     query_info[7], str(query_info[9])]
-            L = [target_name, query_info[3], query_info[1], query_info[2], '+', 
-                 query_name, query_info[6], query_info[4], query_info[5], query_info[7], 
-                 query_info[8], str(query_info[9])]
+        # Target (+) --------
+        # Query (-)    ------
+        elif query_info["query_start"] > 20 and query_info["query_length"] - query_info["query_end"] <= 20 \
+             and query_info["target_start"] > 20 and query_info["target_length"] - query_info["target_end"] <= 20 \
+             and query_info["query_dir"] == '-':
+            unmapped_query_bases = query_info["query_length"] - query_info["query_end"]
+            unmapped_target_bases = query_info["target_length"] - query_info["target_end"]
+            new_cigar = unmapped_query_bases * 'I' + swapCigarReference(query_info["cigar"]) + unmapped_target_bases * 'D'
+            L = [target_name, query_info["target_length"], query_info["target_start"], query_info["target_end"], '+', 
+                 query_name, query_info["query_length"], query_info["query_start"], query_info["query_end"], '-', 
+                 query_info["overlap"], new_cigar]
+        elif query_info["query_start"] == 0 and query_info["query_length"] - query_info["query_end"] <= 20 \
+             and query_info["target_start"] > 20 and query_info["target_length"] - query_info["target_end"] <= 20 \
+             and query_info["query_dir"] == '-':
+            unmapped_query_bases = query_info["query_length"] - query_info["query_end"]
+            unmapped_target_bases = query_info["target_length"] - query_info["target_end"]
+            new_cigar = unmapped_query_bases * 'I' + swapCigarReference(query_info["cigar"]) + unmapped_target_bases * 'D'
+            L = [target_name, query_info["target_length"], query_info["target_start"], query_info["target_end"], '+', 
+                 query_name, query_info["query_length"], query_info["query_start"], query_info["query_end"], '-', 
+                 query_info["overlap"], new_cigar]
+        elif query_info["query_start"] > 20 and query_info["query_length"] - query_info["query_end"] <= 20 \
+             and query_info["target_start"] == 0 and query_info["target_length"] - query_info["target_end"] <= 20 \
+             and query_info["query_dir"] == '-':
+            unmapped_query_bases = query_info["query_length"] - query_info["query_end"]
+            unmapped_target_bases = query_info["target_length"] - query_info["target_end"]
+            new_cigar = unmapped_query_bases * 'I' + swapCigarReference(query_info["cigar"]) + unmapped_target_bases * 'D'
+            L = [target_name, query_info["target_length"], query_info["target_start"], query_info["target_end"], '+', 
+                 query_name, query_info["query_length"], query_info["query_start"], query_info["query_end"], '-', 
+                 query_info["overlap"], new_cigar]
 
         else:
-            if query_info[1] <= 20 and query_info[3] - query_info[2] <= 20 and (query_name in C1 or query_name in dash):
+            if query_info["target_start"] <= 20 and query_info["target_length"] - query_info["target_end"] <= 20 and (query_name in C1 or query_name in dash):
                 contained.add(target_name)
-            elif query_info[4] <= 20 and query_info[6] - query_info[5] <= 20 and (query_name in C1 or query_name in dash):
+            elif query_info["query_start"] <= 20 and query_info["query_length"] - query_info["query_end"] <= 20 and (query_name in C1 or query_name in dash):
                 contained.add(query_name)
             continue
         if query_name in C1:
@@ -816,7 +867,7 @@ def draw2(fasta, Llines, out, haveDoneTR):
         else:
             consideredReads.add(Lline[0])
             consideredReads.add(Lline[5])
-            content = 'L\t' + '\t'.join([Lline[0], Lline[4], Lline[5], Lline[9], str(Lline[10])+'M', str(Lline[1]), str(Lline[6]), str(Lline[-2]), Lline[-1]]) + '\n'
+            content = 'L\t' + '\t'.join([Lline[0], Lline[4], Lline[5], Lline[9], str(Lline[11]), str(Lline[1]), str(Lline[6]), str(Lline[-2]), Lline[-1]]) + '\n'
         
         out.write(content)
     for record in SeqIO.parse(fasta, 'fasta'):
