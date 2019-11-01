@@ -671,7 +671,6 @@ def variantCall(targetName, paflines, outputCov):
             L = [target_name, query_info["target_length"], query_info["target_start"], query_info["target_end"], '+', 
                  query_name, query_info["query_length"], query_info["query_start"], query_info["query_end"], '-', 
                  query_info["overlap"], new_cigar]
-
         else:
             if query_info["target_start"] <= 20 and query_info["target_length"] - query_info["target_end"] <= 20 and (query_name in C1 or query_name in dash):
                 contained.add(target_name)
@@ -963,7 +962,13 @@ def draw2(fasta, Llines, out, haveDoneTR):
         else:
             consideredReads.add(Lline[0])
             consideredReads.add(Lline[5])
-            content = 'L\t' + '\t'.join([Lline[0], Lline[4], Lline[5], Lline[9], str(Lline[11]), str(Lline[1]), str(Lline[6]), str(Lline[-2]), Lline[-1]]) + '\n'
+            #simplify CIGAR string to a stretch of matches
+            cigar = Lline[11]
+            ops = re.findall(r'[0-9]+[MDI]', cigar)
+            ops_parsed = [(int(op[:-1]), op[-1]) for op in ops]
+            len_overlap_first = sum([l for l, op in ops_parsed if op == "M" or op == "D"])
+            len_overlap_second = sum([l for l, op in ops_parsed if op == "M" or op == "I"])
+            content = 'L\t' + '\t'.join([Lline[0], Lline[4], Lline[5], Lline[9], str(min(len_overlap_first, len_overlap_second)) + "M", str(Lline[1]), str(Lline[6]), str(Lline[-2]), Lline[-1]]) + '\n'
         
         out.write(content)
     for record in SeqIO.parse(fasta, 'fasta'):
