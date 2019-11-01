@@ -445,91 +445,11 @@ def variantCall(targetName, paflines, outputCov):
             L = [target_name, query_info["target_length"], query_info["target_start"], query_info["target_end"], '+', 
                  query_name, query_info["query_length"], query_info["query_start"], query_info["query_end"], '+', 
                  query_info["overlap"], new_cigar]
-        elif query_info["query_start"] <= 20 and query_info["query_end"] == query_info["query_length"] \
-           and query_info["target_start"] > 20 and query_info["target_length"] - query_info["target_end"] <= 20 \
-           and query_info["query_dir"] == '+':
-            unmapped_query_bases = query_info["query_start"]
-            unmapped_target_bases = query_info["target_length"] - query_info["target_end"]
-            if unmapped_query_bases > 0:
-                prefix = str(unmapped_query_bases) + "I"
-            else:
-                prefix = ""
-            if unmapped_target_bases > 0:
-                suffix = str(unmapped_target_bases) + "D"
-            else:
-                suffix = ""
-            new_cigar = prefix + query_info["cigar"] + suffix
-            L = [target_name, query_info["target_length"], query_info["target_start"], query_info["target_end"], '+', 
-                 query_name, query_info["query_length"], query_info["query_start"], query_info["query_end"], '+', 
-                 query_info["overlap"], new_cigar]
-        elif query_info["query_start"] <= 20 and query_info["query_length"] - query_info["query_end"] > 20 \
-           and query_info["target_start"] == 0 and query_info["target_length"] - query_info["target_end"] <= 20 \
-           and query_info["query_dir"] == '+':
-            unmapped_query_bases = query_info["query_start"]
-            unmapped_target_bases = query_info["target_length"] - query_info["target_end"]
-            if unmapped_query_bases > 0:
-                prefix = str(unmapped_query_bases) + "I"
-            else:
-                prefix = ""
-            if unmapped_target_bases > 0:
-                suffix = str(unmapped_target_bases) + "D"
-            else:
-                suffix = ""
-            new_cigar = prefix + query_info["cigar"] + suffix
-            L = [target_name, query_info["target_length"], query_info["target_start"], query_info["target_end"], '+', 
-                 query_name, query_info["query_length"], query_info["query_start"], query_info["query_end"], '+', 
-                 query_info["overlap"], new_cigar]
 
         #          ------- Target
         # Query ------
         elif query_info["target_start"] <= 20 and query_info["target_length"] - query_info["target_end"] > 20\
              and query_info["query_start"] > 20 and query_info["query_length"] - query_info["query_end"] <= 20 \
-             and query_info["query_dir"] == '+':
-            unmapped_query_bases = query_info["query_length"] - query_info["query_end"]
-            unmapped_target_bases = query_info["target_start"]
-            """
-            CIGAR string expresses changes with target as reference
-            GFA output contains edge from the end of query to the start of target
-            CIGAR in GFA must express changes with query as reference (see https://github.com/GFA-spec/GFA-spec/blob/master/GFA1.md#l-link-line)
-            Deletions must be replaced by insertions and vice versa
-            """
-            if unmapped_target_bases > 0:
-                prefix = str(unmapped_target_bases) + "I"
-            else:
-                prefix = ""
-            if unmapped_query_bases > 0:
-                suffix = str(unmapped_query_bases) + "D"
-            else:
-                suffix = ""
-            new_cigar = prefix + swapCigarReference(query_info["cigar"]) + suffix
-            L = [query_name, query_info["query_length"], query_info["query_start"], query_info["query_end"], '+', 
-                 target_name, query_info["target_length"], query_info["target_start"], query_info["target_end"], '+', 
-                 query_info["overlap"], new_cigar]
-        elif query_info["target_start"] <= 20 and query_info["target_end"] == query_info["target_length"] \
-             and query_info["query_start"] > 20 and query_info["query_length"] - query_info["query_end"] <= 20 \
-             and query_info["query_dir"] == '+':
-            unmapped_query_bases = query_info["query_length"] - query_info["query_end"]
-            unmapped_target_bases = query_info["target_start"]
-            """
-            CIGAR string expresses changes with target as reference
-            GFA output contains edge from the end of query to the start of target
-            CIGAR in GFA must express changes with query as reference (see https://github.com/GFA-spec/GFA-spec/blob/master/GFA1.md#l-link-line)
-            Deletions must be replaced by insertions and vice versa
-            """
-            if unmapped_target_bases > 0:
-                prefix = str(unmapped_target_bases) + "I"
-            else:
-                prefix = ""
-            if unmapped_query_bases > 0:
-                suffix = str(unmapped_query_bases) + "D"
-            else:
-                suffix = ""
-            new_cigar = prefix + swapCigarReference(query_info["cigar"]) + suffix
-            L = [query_name, query_info["query_length"], query_info["query_start"], query_info["query_end"], '+', 
-                 target_name, query_info["target_length"], query_info["target_start"], query_info["target_end"], '+', 
-                 query_info["overlap"], new_cigar]
-        elif query_info["target_start"] <= 20 and query_info["target_length"] - query_info["target_end"] > 20 \
-             and query_info["query_start"] == 0 and query_info["query_length"] - query_info["query_end"] <= 20 \
              and query_info["query_dir"] == '+':
             unmapped_query_bases = query_info["query_length"] - query_info["query_end"]
             unmapped_target_bases = query_info["target_start"]
@@ -575,48 +495,6 @@ def variantCall(targetName, paflines, outputCov):
             L = [query_name, query_info["query_length"], query_info["query_start"], query_info["query_end"], '-', 
                  target_name, query_info["target_length"], query_info["target_start"], query_info["target_end"], '+', 
                  query_info["overlap"], new_cigar]
-        elif query_info["target_start"] <= 20 and query_info["target_end"] == query_info["target_length"] \
-             and query_info["query_start"] <= 20 and query_info["query_length"] - query_info["query_end"] > 20 \
-             and query_info["query_dir"] == '-':
-            unmapped_query_bases = query_info["query_start"]
-            unmapped_target_bases = query_info["target_start"]
-            # CIGAR string expresses changes with target as reference
-            # GFA output contains edge from the end of query to the start of target
-            # CIGAR in GFA must express changes with query as reference (see https://github.com/GFA-spec/GFA-spec/blob/master/GFA1.md#l-link-line)
-            # Deletions must be replaced by insertions and vice versa
-            if unmapped_target_bases > 0:
-                prefix = str(unmapped_target_bases) + "I"
-            else:
-                prefix = ""
-            if unmapped_query_bases > 0:
-                suffix = str(unmapped_query_bases) + "D"
-            else:
-                suffix = ""
-            new_cigar = prefix + swapCigarReference(query_info["cigar"]) + suffix
-            L = [query_name, query_info["query_length"], query_info["query_start"], query_info["query_end"], '-', 
-                 target_name, query_info["target_length"], query_info["target_start"], query_info["target_end"], '+', 
-                 query_info["overlap"], new_cigar]
-        elif query_info["target_start"] <= 20 and query_info["target_length"] - query_info["target_end"] > 20 \
-             and query_info["query_start"] <= 20 and query_info["query_end"] == query_info["query_length"] \
-             and query_info["query_dir"] == '-':
-            unmapped_query_bases = query_info["query_start"]
-            unmapped_target_bases = query_info["target_start"]
-            # CIGAR string expresses changes with target as reference
-            # GFA output contains edge from the end of query to the start of target
-            # CIGAR in GFA must express changes with query as reference (see https://github.com/GFA-spec/GFA-spec/blob/master/GFA1.md#l-link-line)
-            # Deletions must be replaced by insertions and vice versa
-            if unmapped_target_bases > 0:
-                prefix = str(unmapped_target_bases) + "I"
-            else:
-                prefix = ""
-            if unmapped_query_bases > 0:
-                suffix = str(unmapped_query_bases) + "D"
-            else:
-                suffix = ""
-            new_cigar = prefix + swapCigarReference(query_info["cigar"]) + suffix
-            L = [query_name, query_info["query_length"], query_info["query_start"], query_info["query_end"], '-', 
-                 target_name, query_info["target_length"], query_info["target_start"], query_info["target_end"], '+', 
-                 query_info["overlap"], new_cigar]
 
         # Target (+) --------
         # Query (-)    ------
@@ -637,40 +515,7 @@ def variantCall(targetName, paflines, outputCov):
             L = [target_name, query_info["target_length"], query_info["target_start"], query_info["target_end"], '+', 
                  query_name, query_info["query_length"], query_info["query_start"], query_info["query_end"], '-', 
                  query_info["overlap"], new_cigar]
-        elif query_info["query_start"] == 0 and query_info["query_length"] - query_info["query_end"] <= 20 \
-             and query_info["target_start"] > 20 and query_info["target_length"] - query_info["target_end"] <= 20 \
-             and query_info["query_dir"] == '-':
-            unmapped_query_bases = query_info["query_length"] - query_info["query_end"]
-            unmapped_target_bases = query_info["target_length"] - query_info["target_end"]
-            if unmapped_query_bases > 0:
-                prefix = str(unmapped_query_bases) + "I"
-            else:
-                prefix = ""
-            if unmapped_target_bases > 0:
-                suffix = str(unmapped_target_bases) + "D"
-            else:
-                suffix = ""
-            new_cigar = prefix + query_info["cigar"] + suffix
-            L = [target_name, query_info["target_length"], query_info["target_start"], query_info["target_end"], '+', 
-                 query_name, query_info["query_length"], query_info["query_start"], query_info["query_end"], '-', 
-                 query_info["overlap"], new_cigar]
-        elif query_info["query_start"] > 20 and query_info["query_length"] - query_info["query_end"] <= 20 \
-             and query_info["target_start"] == 0 and query_info["target_length"] - query_info["target_end"] <= 20 \
-             and query_info["query_dir"] == '-':
-            unmapped_query_bases = query_info["query_length"] - query_info["query_end"]
-            unmapped_target_bases = query_info["target_length"] - query_info["target_end"]
-            if unmapped_query_bases > 0:
-                prefix = str(unmapped_query_bases) + "I"
-            else:
-                prefix = ""
-            if unmapped_target_bases > 0:
-                suffix = str(unmapped_target_bases) + "D"
-            else:
-                suffix = ""
-            new_cigar = prefix + query_info["cigar"] + suffix
-            L = [target_name, query_info["target_length"], query_info["target_start"], query_info["target_end"], '+', 
-                 query_name, query_info["query_length"], query_info["query_start"], query_info["query_end"], '-', 
-                 query_info["overlap"], new_cigar]
+
         else:
             if query_info["target_start"] <= 20 and query_info["target_length"] - query_info["target_end"] <= 20 and (query_name in C1 or query_name in dash):
                 contained.add(target_name)
