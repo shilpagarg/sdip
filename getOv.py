@@ -3,26 +3,26 @@ from collections import defaultdict
 import subprocess
 from multiprocessing import Pool, Process, Manager
 import os
-t = 150
+import argparse
 
-def getChunk(gamFilecache, threadN):
+def getChunk(gamFilecache, num_chunks):
 	NR = len(gamFilecache)
-	if NR % threadN == 0:
-		chunkSize = int(NR / threadN)
+	if NR % num_chunks == 0:
+		chunkSize = int(NR / num_chunks)
 	else:
-		if NR % threadN != 0:
-			chunkSize = NR // threadN + 1
+		if NR % num_chunks != 0:
+			chunkSize = NR // num_chunks + 1
 		else:
-			chunkSize = NR / threadN
+			chunkSize = NR / num_chunks
 	chunks = []
-	for i in range(threadN):
+	for i in range(num_chunks):
 		if (i + 1) * chunkSize <= NR: 
 			chunks.append((i*chunkSize, (i+1)*chunkSize))
 		else:
 			chunks.append((i*chunkSize, NR))
 	return chunks
 
-def matchLines(chunk, reads, results):
+def doOneChunk(chunk, reads, results):
 	ovlp = defaultdict(set)
 	for line in chunk:
 		tokens = line.split()
@@ -34,43 +34,55 @@ def matchLines(chunk, reads, results):
 		out = out.union(ovlp[r])
 	results.extend(list(out))
 
-
-dic = sys.argv[1]
-ovlpPath = sys.argv[2]
-reads = sys.argv[3]
-
-sys.stderr.write('Reading id-readName table...\n')
-D = open(dic, 'r').read().split('\n')[:-1]
-id2read = {line.split()[0]:line.split()[1] for line in D}
-read2id = {line.split()[1]:line.split()[0] for line in D}
-sys.stderr.write('id-readName hashes built\n')
-readsets = [read2id[i] for i in open(reads, 'r').read().split('\n')[:-1]]
-ovlpFiiles = [ovlpPath+i for i in os.listdir(ovlpPath)]
-
-def doOneChunk(ovlp):
+def doOneFile(ovlp, reads, num_chunks, num_threads):
 	sys.stderr.write('Reading overlaps...\n')
 	O = open(ovlp, 'r').read().split('\n')[:-1]
-	chunckidx = getChunk(O, t)
+	chunckidx = getChunk(O, num_chunks)
 	sys.stderr.write('Overlaps read, chunks built\n')
-
-	
 
 	sys.stderr.write('Start to run parallel...\n')
 	m = Manager()
 	results = m.list()
 
-	p = Pool(24)
+	p = Pool(num_threads)
 
 	processes = []
-	for c in range(t):
-		processes.append(p.apply_async(matchLines, (O[chunckidx[c][0]:chunckidx[c][1]], readsets, results)))
+	for c in range(num_chunks):
+		processes.append(p.apply_async(doOneChunk, (O[chunckidx[c][0]:chunckidx[c][1]], reads, results)))
 
 	p.close()
 	p.join()
 
-	for i in set(results):
-		print(id2read[i])
+	return set(results).union(reads)
 
+def main():
+	parser = argparse.ArgumentParser()
+	parser.add_argument('dict', type = str, help = 'id-to-readname dictionary')
+	parser.add_argument('ovlp_path', type = str, help = 'path to overlap files')
+	parser.add_argument('reads', type = str, help = 'read list')
+	parser.add_argument('--num_chunks', type = int, default=150, help = 'number of chunks (default: 150)')
+	parser.add_argument('--num_threads', type = int, default=1, help = 'number of threads (default: 1)')
+	parser.add_argument('--min_identity', type = float, default=99.4, help = 'minimum overlap identity (default: 99.4)')
+	args = parser.parse_args()
 
-for i in ovlpFiiles:
-	doOneChunk(i)
+	sys.stderr.write('Reading id-readName table...\n')
+
+	dict_file = open(args.dict, 'r')
+	id2read = {}
+	read2id = {}
+	for line in dict_file:
+		fields = line.strip().split()
+		id2read[fields[0]] = fields[1]
+		read2id[fields[1]] = fields[0]
+
+	sys.stderr.write('id-readName table built\n')
+
+	reads = [read2id[i] for i in open(args.reads, 'r').read().split('\n')[:-1]]
+	ovlpFiles = [args.ovlp_path+i for i in os.listdir(args.ovlp_path)]
+	for i in ovlpFiles:
+		results = doOneFile(i, reads, args.num_chunks, args.num_threads)
+		for i in results:
+			print(id2read[i])
+
+if __name__ == '__main__':
+	main()
