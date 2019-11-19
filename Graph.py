@@ -27,10 +27,19 @@ class Graph(object):
         self.edgeOvlp[(node1.name, node2.name)] = ovlp
         self.edgeOvlp[(node2.name, node1.name)] = ovlp
 
+    def removeLonelyNodes(self):
+        lonely_nodes = []
+        for name, node in self.nodemap.items():
+            if node.Bnodes == set() and node.Enodes == set():
+                lonely_nodes.append(name)
+        for name in lonely_nodes:
+            del self.nodemap[name]
+            print("Removed lonely node", name, file=sys.stderr)
+
     def getStartOrEndNodes(self):
         startOrEnd = set()
         for node, N in self.nodemap.items():
-            if N.Bnodes == set() or N.Enodes == set():
+            if (N.Bnodes == set() and N.Enodes != set()) or (N.Bnodes != set() and N.Enodes == set()):
                 startOrEnd.add(node)
         return startOrEnd
 
@@ -71,7 +80,7 @@ class Graph(object):
             if self.nodemap[last].Enodes == set():
                 stack.append([(last, '-')])
             else:
-                stack.append([(last, '+')])            
+                stack.append([(last, '+')])
             while len(stack) > 0:
                 path = stack.pop()
                 last_node, last_orientation = path[-1]
@@ -115,6 +124,73 @@ class Graph(object):
                             return paths
                         #print([(step[0][-7:-4], step[1]) for step in path])
         return paths
+    
+    def getAllTips(self, max_length):
+        startOrEnd = self.getStartOrEndNodes()
+        #print(len(startOrEnd), file=sys.stderr)
+        tips = []
+        for tip in startOrEnd:
+            #print("Start with tip " + tip, file=sys.stderr)
+            last = tip
+            stack = []
+            if self.nodemap[last].Enodes == set():
+                stack.append([(last, '-')])
+            else:
+                stack.append([(last, '+')])        
+            while len(stack) > 0:
+                path = stack.pop()
+                last_node, last_orientation = path[-1]
+                #print("At node " + last_node, file=sys.stderr)
+                if last_orientation == '+':
+                    if len(self.nodemap[last_node].Enodes) > 0:
+                        if len(self.nodemap[last_node].Enodes) == 1:
+                            nxt = list(self.nodemap[last_node].Enodes)[0]
+                            if last_node in self.nodemap[nxt].Bnodes:
+                                if len(self.nodemap[nxt].Bnodes) > 1:
+                                    if len(path) <= max_length:
+                                        tips.append(path)
+                                    break
+                                else:
+                                    stack.append(path + [(nxt, '+')])
+                            elif last_node in self.nodemap[nxt].Enodes:
+                                if len(self.nodemap[nxt].Enodes) > 1:
+                                    if len(path) <= max_length:
+                                        tips.append(path)
+                                    break
+                                else:
+                                    stack.append(path + [(nxt, '-')])
+                        else:
+                            break
+                    else:
+                        #print("Reached tip " + str(len(paths)), file=sys.stderr)
+                        if len(path) <= max_length:
+                            tips.append(path)
+                else:
+                    if len(self.nodemap[last_node].Bnodes) > 0:
+                        if len(self.nodemap[last_node].Bnodes) == 1:
+                            nxt = list(self.nodemap[last_node].Bnodes)[0]
+                            if last_node in self.nodemap[nxt].Bnodes:
+                                if len(self.nodemap[nxt].Bnodes) > 1:
+                                    if len(path) <= max_length:
+                                        tips.append(path)
+                                    break
+                                else:
+                                    stack.append(path + [(nxt, '+')])
+                            elif last_node in self.nodemap[nxt].Enodes:
+                                if len(self.nodemap[nxt].Enodes) > 1:
+                                    if len(path) <= max_length:
+                                        tips.append(path)
+                                    break
+                                else:
+                                    stack.append(path + [(nxt, '-')])
+                        else:
+                            break
+                    else:
+                        #print("Reached tip " + str(len(paths)), file=sys.stderr)
+                        if len(path) <= max_length:
+                            tips.append(path)
+                        #print([(step[0][-7:-4], step[1]) for step in path])
+        return tips
 
     def getPathSeqLength(self, path):
         rawLength = 0
