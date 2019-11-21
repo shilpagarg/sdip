@@ -31,26 +31,25 @@ class Graph:
 	def __init__(self):
 		self.nodes = {}
 		self.edges = {}
-	def load(self, filename):
-		with open(filename) as f:
-			for l in f:
-				parts = l.strip().split('\t')
-				if parts[0] == 'S':
-					parsed = self._parse_node(parts)
-					self.nodes[parsed.nodeid] = parsed
-					if (parts[1], True) not in self.edges: self.edges[(parts[1], True)] = set()
-					if (parts[1], False) not in self.edges: self.edges[(parts[1], False)] = set()
-				if parts[0] == 'L':
-					frompos = (parts[1], parts[2] == '+')
-					topos = (parts[3], parts[4] == '+')
-					overlap = int(parts[5][:-1])
-					if frompos not in self.edges: self.edges[frompos] = set()
-					if reverse(topos) not in self.edges: self.edges[reverse(topos)] = set()
-					readcount = None
-					for tag in parts[6:]:
-						if tag[0:5] == "RC:i:": readcount = float(tag[5:])
-					self.edges[reverse(topos)].add((reverse(frompos), (overlap, readcount)))
-					self.edges[frompos].add((topos, (overlap, readcount)))
+	def load(self, f):
+		for l in f:
+			parts = l.strip().split('\t')
+			if parts[0] == 'S':
+				parsed = self._parse_node(parts)
+				self.nodes[parsed.nodeid] = parsed
+				if (parts[1], True) not in self.edges: self.edges[(parts[1], True)] = set()
+				if (parts[1], False) not in self.edges: self.edges[(parts[1], False)] = set()
+			if parts[0] == 'L':
+				frompos = (parts[1], parts[2] == '+')
+				topos = (parts[3], parts[4] == '+')
+				overlap = int(parts[5][:-1])
+				if frompos not in self.edges: self.edges[frompos] = set()
+				if reverse(topos) not in self.edges: self.edges[reverse(topos)] = set()
+				readcount = None
+				for tag in parts[6:]:
+					if tag[0:5] == "RC:i:": readcount = float(tag[5:])
+				self.edges[reverse(topos)].add((reverse(frompos), (overlap, readcount)))
+				self.edges[frompos].add((topos, (overlap, readcount)))
 	def remove_nonexistent_edges(self):
 		extra = []
 		for edge in self.edges:
