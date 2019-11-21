@@ -77,7 +77,7 @@ def remove_bubble(graph, paths):
 
 def main():
 	parser = argparse.ArgumentParser()
-	parser.add_argument('gfa', type = str, help = 'input GFA graph file')
+	parser.add_argument('gfa', nargs='?', type=argparse.FileType('r'), default=sys.stdin, help = 'input GFA graph file (default: stdin)')
 	parser.add_argument('action', choices=['list', 'remove'])
 	parser.add_argument('--max_size', type = int, default = -1, help = 'maximum bubble size (number of nodes between start and end), default: -1 = all bubbles')
 	args = parser.parse_args()
@@ -85,7 +85,7 @@ def main():
 	ingraph = args.gfa
 
 	graph = Graph()
-	graph.load(ingraph)
+	graph.load(args.gfa)
 	graph.remove_nonexistent_edges()
 
 	bubbles = []

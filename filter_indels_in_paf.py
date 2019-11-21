@@ -4,13 +4,12 @@ import re
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('paf', type = str, help = 'Input paf file')
+    parser.add_argument('paf', nargs='?', type=argparse.FileType('r'), default=sys.stdin, help = 'Input paf file (default: stdin')
     parser.add_argument('--max_indel', type = int, default = 20, help = 'Maximum allowed indel size (default: 20)')
     args = parser.parse_args()
 
-    paf_file = open(args.paf, "r")
     num_filtered = 0
-    for line in paf_file:
+    for line in args.paf:
         fields = line.split('\t')
         query_name = fields[0]
         query_length = int(fields[1])
