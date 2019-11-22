@@ -3,6 +3,7 @@ import argparse
 import networkx as nx
 from collections import defaultdict
 from Graph import Graph, Node
+import json
 
 '''
 Usage: python this.py GFA regionLength(bp)
@@ -10,7 +11,7 @@ Usage: python this.py GFA regionLength(bp)
 
 def readGFA(gfaFile):
     gfa = open(gfaFile).read().split('\n')[:-1]
-    
+
     nodesSeq = dict()
     edges = list()
     for line in gfa:
@@ -68,7 +69,7 @@ def get_connected_components(graph):
                     visited.append(neighbour)
                     nodes.remove(neighbour)
         connected_components.append(visited)
-        
+
     return connected_components
 
 
@@ -77,18 +78,22 @@ def divide(graph):
     print('Found', len(components), 'connected components', file=sys.stderr)
     return components
 
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('gfa', type = str, help = 'Input GFA graph file.')
+    parser.add_argument('json', type = str, help = 'Input JSON file')
+    parser.add_argument('fa', type = str, help = 'Input FA file')
     args = parser.parse_args()
-
+    jsonfile = args.json
+    f = open(jsonfile, 'r')
+    longreads = f.readlines()
     G, nxg = readGFA(args.gfa)
-    #components = divide(nxg)    
+    #components = divide(nxg)
     print("Start computing paths..", file=sys.stderr)
     paths = G.getAllPaths()
     print("Computed %d paths." % len(paths), file=sys.stderr)
     paths_between_tips = defaultdict(list)
+    tips = []
     for path in paths:
         first_node = path[0][0]
         last_node = path[-1][0]
@@ -96,16 +101,39 @@ def main():
             paths_between_tips[(first_node, last_node)].append(path)
         else:
             paths_between_tips[(last_node, first_node)].append(path)
+        if first_node not in tips:
+            tips += [first_node]
+        if last_node not in tips:
+            tips += [last_node]
 
     hap_count = 0
+
+    out = open(args.fa, 'w')
     for (tip1, tip2), paths in paths_between_tips.items():
         paths_with_lengths = sorted([(G.getPathSeqLength(path), path) for path in paths], key=lambda entry: entry[0])
         print('Found %d paths between %s and %s, longest sequence length %d' % (len(paths_with_lengths), tip1, tip2, paths_with_lengths[-1][0]), file=sys.stderr)
         longest_path = paths_with_lengths[-1][1]
-        hap_count += 1
         input_file_name_prefix = "_".join(args.gfa.split("/")[-1].split(".")[:-1])
-        print('>%s_hap%d' % (input_file_name_prefix, hap_count))
-        print(G.getPathSeq(longest_path))
+    hap_count = 0
+    for i in range(len(tips)):
+        for j in range(i+1,len(tips)):
+            goodpaths = []
+            edges1 = list(nx.bfs_edges(nxg, tips[i], depth_limit=2))
+            edges2 = list(nx.bfs_edges(nxg, tips[j], depth_limit=2))
+            _, threeawaytip1 = edges1[1]
+            _, threeawaytip2 = edges2[1]
+            for k, line in enumerate(longreads):
+                if threeawaytip1 in line and threeawaytip2 in line:
+                    tips1 = min(tips[i], tips[j])
+                    tips2 = max(tips[i], tips[j])
+                    for path in paths_between_tips[(tips1,tips2)]:
+                        hap_count += 1
+                        out.write('>%s_hap%d\n' % (input_file_name_prefix, hap_count))
+                        out.write(G.getPathSeq(path))
+                        out.write('\n')
+                    break
+    print("Total paths found is: ", hap_count)
+    out.close()
 
 if __name__ == '__main__':
     main()
