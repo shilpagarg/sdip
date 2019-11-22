@@ -203,6 +203,16 @@ rule plot_bandage_pruned:
     shell:
         "LINES=$(wc -l < {input.graph}) ; if [ $LINES -gt 0 ]; then ../bin/Bandage image {input.graph} {output.png} --height 4000; else echo '' > {output.png}; fi"
 
+rule ul_align_to_graph:
+    input:
+        graph = "regions/gfas/pruned/r{region}.{subset}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.gfa"
+        nano = "regions/nano/fastas/r{region}.{subset}.fasta"
+    output:
+        aln = "regions/nano/aln/r{region}.{subset}.json"
+    log: "regions/nano/aln/r{region}.{subset}.log"
+    shell:
+        "GraphAligner -g {input.graph} -f {input.nano} --try-all-seeds -t 30 -a {output.aln} --seeds-mxm-length 10 -b 35 1>{log} 2>&1"
+
 rule pool_contigs:
     input:
         expand("regions/contigs/r{i}.{{subset}}.notips{{tip_max_size}}.nobubbles{{bubble_max_size}}.fa", i=good_regions)
