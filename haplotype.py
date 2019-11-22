@@ -197,7 +197,7 @@ class pileup():
                     C.merge(c)
                     merged = True
                     break
-                elif len(c.pos_allele) > 3 and len(C.pos_allele) > 3 and C.distance(c) <= max(1, 0.05 * len(C.pos_allele)):  # THRESHOLD
+                elif len(c.pos_allele) > 0 and len(C.pos_allele) > 0 and C.distance(c) <= max(1, 0.05 * len(C.pos_allele)):  # THRESHOLD
                     C.merge(c)
                     merged = True
                     break
@@ -213,14 +213,14 @@ class pileup():
         if len(self.largeClusters) > 0:
             self.largeClusters[0].selfCheck()
             for read in self.largeClusters[0].members:
-                if len(read.ori_var)/(read.tgt_end - read.tgt_start) < 0.002:
+                if len(read.ori_var)/(read.tgt_end - read.tgt_start) < 0.004:
                     C1[read.name] = self.ovlp[read.name]
                 else:
                     log('Discarded', read, 'because originally too many snps', len(read.ori_var), 'with overlapping length', read.tgt_end - read.tgt_start)
         dash = {}
         for c in dashed:
             for read in c.members:
-                if len(read.ori_var)/(read.tgt_end - read.tgt_start) < 0.002: 
+                if len(read.ori_var)/(read.tgt_end - read.tgt_start) < 0.004: 
                     dash[read.name] = 0
                 else:
                     log('Discarded', read, 'because originally too many snps', len(read.ori_var), 'with overlapping length', read.tgt_end - read.tgt_start)
@@ -311,7 +311,7 @@ class Cluster(object):
     def selfCheck(self):
         toRemove = set()
         for pos, readSet in self.diff_reads.items():
-            if len(readSet) / self.inClusterDepth(pos) > 0.25 and len(readSet) / self.inClusterDepth(pos) < 0.75:
+            if len(readSet) / self.inClusterDepth(pos) > 0.4 and len(readSet) / self.inClusterDepth(pos) < 0.65:
                 toRemove = toRemove.union(readSet)
                 log('Removing at selfcheck where depth is', self.inClusterDepth(pos), readSet)
         
@@ -572,11 +572,11 @@ def selectOvlp(Llines):
         dash = []
         for conn in info:
             log(conn)
-            if conn[3] >= 4 and ((conn[1] >= 0.5 and conn[2] >= 0.50) or conn[0] > 5000): # Before was 6000, for ragoo based, adjusted to 4000
+            if conn[3] >= 2 and ((conn[1] >= 0.4 and conn[2] >= 0.40) or conn[0] > 4000): # Before was 6000, for ragoo based, adjusted to 4000
                 good.append(conn)
-            elif conn[3] > 0 and ((conn[1] >= 0.50 and conn[2] >= 0.50) or conn[0] > 5000):
+            elif conn[3] > 0 and ((conn[1] >= 0.40 and conn[2] >= 0.40) or conn[0] > 4000):
                 potential.append(conn)
-            elif conn[3] == 0 and ((conn[1] >= 0.4 and conn[2] >= 0.4) or conn[0] > 5000):
+            elif conn[3] == 0 and ((conn[1] >= 0.2 and conn[2] >= 0.2) or conn[0] > 4000):
                 dash.append(conn)
                  
             else:
