@@ -1,23 +1,26 @@
 configfile: "config.yaml"
-
+# ftp://ftp-trace.ncbi.nlm.nih.gov/giab/ftp/data/AshkenazimTrio/HG002_NA24385_son/UCSC_Ultralong_OxfordNanopore_Promethion/
 big_regions = [17, 32, 96, 101, 102, 108, 162, 166, 216, 217, 218, 267, 268, 275, 278, 285, 296, 306, 307, 433, 467, 470, 471, 503, 504]
 good_regions = [elem for elem in list(range(1, 505)) if not elem in big_regions]
 
 rule all:
     input:
-        expand("regions/pngs/r{i}.png", i=good_regions),
-        expand("regions/pngs/r{i}_pruned_nanopore.min{min_cov}.png", i=good_regions, min_cov=[1, 2, 4, 6, 10]),
-        expand("regions/pngs/r{i}_pruned_nanopore_pacbio.min{min_cov}.png", i=good_regions, min_cov=[1, 2, 4, 6, 10])
-        #expand("regions/pngs/r{i}_pruned2.min1.max5.png", i=good_regions),
-        #expand("regions/gfas/r{i}.reducted.gfa", i=good_regions)
-        #"regions/contigs/pooled.sorted.bam"
-
+        expand("regions/pngs/r{i}.{subset}.png", i=good_regions, subset=["primary", "primary.full"]),
+        expand("regions/pngs/r{i}.{subset}.pruned.notips{tip_max_size}.nobubbles{bubble_max_size}.png", i=good_regions,
+                                                                                                        subset=["primary", "primary.full"],
+                                                                                                        tip_max_size=[5],
+                                                                                                        bubble_max_size=[5]),
+        expand("regions/contigs/pooled.{subset}.notips{tip_max_size}.nobubbles{bubble_max_size}.fa", subset=["primary", "primary.full"],
+                                                                                                     tip_max_size=[5],
+                                                                                                     bubble_max_size=[5])
 
 def get_samples(wildcards):
     return config["samples"][wildcards.sample]
 
 wildcard_constraints:
-    region="\d+"
+    region="\d+",
+    tip_max_size="\d+",
+    bubble_max_size="\d+"
 
 
 rule minimap:
@@ -35,7 +38,7 @@ rule pool_samples:
         expand("alignment/{sample}.bam", sample=config["samples"])
     output:
         "alignment/pooled.bam"
-    threads: 30
+    threads: 4
     shell:
         "samtools merge -@ {threads} -r {output} {input}"
 
@@ -56,8 +59,8 @@ rule recruit_primary_reads:
     output:
         temp("regions/bams/r{region,\d+}.primary.bam")
     params:
-        primary_mapq_threshold = 30
-    threads: 20
+        primary_mapq_threshold = 1 
+    threads: 5
     shell:
         "chr=`awk '{{if (NR=={wildcards.region}) {{ print $1 }} }}' {input.regions}`; start=`awk '{{ if (NR=={wildcards.region}) {{ print $2 }} }}' {input.regions}`; end=`awk '{{ if (NR=={wildcards.region}) {{ print $3 }} }}' {input.regions}`; samtools view -b -@ {threads} -F 256 -q {params.primary_mapq_threshold} {input.bam} ${{chr}}:${{start}}-${{end}} > {output}"
 
@@ -68,190 +71,153 @@ rule recruit_secondary_reads:
         index = "alignment/pooled.bam.bai"
     output:
         temp("regions/bams/r{region,\d+}.secondary.bam")
-    threads: 20
+    threads: 5
     shell:
         "chr=`awk '{{if (NR=={wildcards.region}) {{ print $1 }} }}' {input.regions}`; start=`awk '{{ if (NR=={wildcards.region}) {{ print $2 }} }}' {input.regions}`; end=`awk '{{ if (NR=={wildcards.region}) {{ print $3 }} }}' {input.regions}`; samtools view -b -@ {threads} -f 256 {input.bam} ${{chr}}:${{start}}-${{end}} > {output}"
 
-rule merge_primary_and_secondary:
-    input:
-        primary = "regions/bams/r{region}.primary.bam",
-        secondary = "regions/bams/r{region}.secondary.bam"
-    output:
-        "regions/bams/r{region,\d+}.bam"
-    shell:
-        "samtools merge {output} {input}"
-
 rule get_read_names:
     input:
-        "regions/bams/r{region}.bam"
+        "regions/bams/r{region}.{subset}.bam"
     output:
-        "regions/reads/r{region}.reads"
+        "regions/reads/r{region,\d+}.{subset}.reads"
     shell:
         "samtools view {input} | cut -d$'\t' -f1 | sort | uniq > {output}"
+
+rule grab_more_from_overlaps:
+    input:
+        "regions/reads/r{region}.{subset}.reads"
+    output:
+        "regions/reads/r{region}.{subset}.full.reads"
+    threads: 10
+    shell:
+        "python3 ../WHdenovo/paftest/getOv.py --num_chunks 50 --num_threads 10 ../../../tmp/hg002-asm-r3-pg0.1.5.3/0-seqdb/seq_dataset.idx ../../../tmp/hg002-asm-r3-pg0.1.5.3/3-asm/split/ {input} | sort | uniq > {output}"
+
+rule merge_primary_and_secondary:
+    input:
+        primary = "regions/reads/r{region}.primary.reads",
+        secondary = "regions/reads/r{region}.secondary.reads"
+    output:
+        "regions/reads/r{region,\d+}.merged.reads"
+    shell:
+        "cat {input} > {output}"
 
 rule get_fastq:
     input:
         allreads = config["reads"],
-        names = "regions/reads/r{region}.reads"
+        names = "regions/reads/r{region}.{subset}.reads"
     output:
-        temp("regions/fastas/r{region}.fastq")
+        temp("regions/fastas/r{region}.{subset}.fastq")
     shell:
-        "LINES=$(wc -l < {input.names}) ; if [ $LINES -lt 20000 ]; then /project/pacbiosv/bin/seqtk/seqtk subseq {input.allreads} {input.names} > {output}; else echo '' > {output}; fi"
+        "LINES=$(wc -l < {input.names}) ; if [ $LINES -lt 20000 ]; then seqtk subseq {input.allreads} {input.names} > {output}; else echo '' > {output}; fi"
 
 rule convert_fastq_to_fasta:
     input:
-        "regions/fastas/r{region}.fastq"
+        "regions/fastas/r{region}.{subset}.fastq"
     output:
-        "regions/fastas/r{region}.fasta"
+        "regions/fastas/r{region}.{subset}.fasta"
     shell:
-        "/project/pacbiosv/bin/seqtk/seqtk seq -A {input} > {output}"
-
-# rule generate_graph:
-#     input:
-#         fasta = "regions/fastas/r{region}.fasta"
-#     output:
-#         gfa = "regions/gfas/r{region}.reducted.gfa"
-#     threads: 10
-#     params:
-#         output = "regions/gfas/r{region}.gfa"
-#     log:
-#         "regions/logs/r{region}.log.gz"
-#     shell:
-#         "python3 /project/pacbiosv/code/WHdenovo/paftest/haplotype.py {input.fasta} -o {params.output} -t {threads} 2>&1 | gzip > {log}"
+        "seqtk seq -A {input} > {output}"
 
 rule all_vs_all_alignment:
     input:
-        fasta = "regions/fastas/r{region}.fasta"
+        fasta = "regions/fastas/r{region}.{subset}.fasta"
     output:
-        paf = "regions/pafs/r{region}.fasta.paf"
+        paf = "regions/pafs/r{region}.{subset}.fasta.paf"
     threads: 10
     shell:
         "minimap2 -c -x asm20 -DP --no-long-join --cs -n500 -t {threads} {input.fasta} {input.fasta} | sort -k8n -k6 > {output.paf}"
 
-# rule generate_graph:
-#     input:
-#         fasta = "regions/fastas/r{region}.fasta"
-#     output:
-#         gfa = "regions/gfas/r{region}.reducted.gfa",
-#         paf = "regions/pafs/r{region}.fasta.paf"
-#     threads: 10
-#     params:
-#         output = "regions/gfas/r{region}.gfa"
-#     log:
-#         "regions/logs/r{region}.log.gz"
-#     shell:
-#         "cd regions/pafs && python3 /project/pacbiosv/code/WHdenovo/paftest/haplotype.py /project/heller_d-data/shilpa/reads_vs_wholegenome/{input.fasta} -o /project/heller_d-data/shilpa/reads_vs_wholegenome/{params.output} -t {threads} 2>&1 | gzip > /project/heller_d-data/shilpa/reads_vs_wholegenome/{log}"
+rule filter_paf_for_long_indels:
+    input:
+        paf = "regions/pafs/r{region}.{subset}.fasta.paf"
+    output:
+        paf = "regions/pafs/r{region}.{subset}.fasta.filtered.paf"
+    shell:
+        "python3 ../WHdenovo/paftest/filter_indels_in_paf.py {input.paf} --max_indel 50 > {output.paf}"
 
 rule generate_graph_use_paf:
     input:
-        fasta = "regions/fastas/r{region}.fasta",
-        paf = "regions/pafs/r{region}.fasta.paf"
+        fasta = "regions/fastas/r{region}.{subset}.fasta",
+        paf = "regions/pafs/r{region}.{subset}.fasta.filtered.paf"
     output:
-        gfa = "regions/gfas/r{region}.reducted.gfa"
+        gfa = "regions/gfas/r{region}.{subset}.reducted.gfa"
     threads: 3
     params:
-        output = "regions/gfas/r{region}.gfa"
+        output = "regions/gfas/r{region}.{subset}.gfa"
     #log:
     #    "regions/logs/r{region}.log.gz"
     shell:
-        "python3 /project/pacbiosv/code/WHdenovo/paftest/haplotype.py {input.fasta} -o {params.output} -t {threads} -p {input.paf} 2>/dev/null"
+        "python3 ../WHdenovo/paftest/haplotype.py {input.fasta} -o {params.output} -t {threads} -p {input.paf} 2>/dev/null"
 
-# rule remove_edges_covering_entire_nodes:
-#     input:
-#         gfa = "regions/gfas/r{region}.reducted.gfa"
-#     output:
-#         gfa = "regions/gfas/r{region}.reducted.nofullmatches.gfa"
-#     shell:
-#         "awk 'OFS=\"\t\" {{ match($6, \"([0-9]+)M\", m); if($1 == \"S\") {{ print $0 }}; if(m[1] != $7 && m[1] != $8) {{ print $0 }} }}' {input.gfa} > {output.gfa}"
-
-rule align_nanopore_reads:
+rule prune_graph:
     input:
-        gfa = "regions/gfas/r{region}.reducted.gfa",
-        fasta = "../nanopore_vs_hg38/regions/fastas/r{region}.fasta"
-    output:
-        json = "regions/json_nanopore/r{region}.json"
+        gfa = "regions/gfas/r{region}.{subset}.reducted.gfa"
+    output:        
+        gfa = "regions/gfas/pruned/r{region}.{subset}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.gfa"
     shell:
-        "/project/pacbiosv/bin/GraphAligner/bin/GraphAligner --seeds-minimizer-chunksize 500 \
-         --seeds-minimizer-length 15 --seeds-minimizer-count 20 -g {input.gfa} -f {input.fasta} -a {output.json}"
+        """python3 ../WHdenovo/paftest/remove_tips.py {input.gfa} remove --max_size {wildcards.tip_max_size} | \
+           python3 ../WHdenovo/paftest/find_ultrabubbles.py remove --max_size {wildcards.bubble_max_size} | \
+           python3 ../WHdenovo/paftest/remove_tips.py remove --max_size {wildcards.tip_max_size} | \
+           python3 ../WHdenovo/paftest/find_ultrabubbles.py remove --max_size {wildcards.bubble_max_size} | \
+           python3 ../WHdenovo/paftest/remove_tips.py remove --max_size {wildcards.tip_max_size} > {output.gfa}"""
 
-rule align_pacbio_reads:
+rule convert_lemon:
     input:
-        gfa = "regions/gfas/r{region}.reducted.gfa",
-        fasta = "regions/fastas/r{region}.fasta"
+        gfa = "regions/gfas/pruned/r{region}.{subset}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.gfa"
     output:
-        json = "regions/json_pacbio/r{region}.json"
+        lemon = "regions/gfas/pruned/r{region}.{subset}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.lemon"
     shell:
-        "/project/pacbiosv/bin/GraphAligner/bin/GraphAligner \
-         --seeds-minimizer-count 20 -g {input.gfa} -f {input.fasta} -a {output.json}"
+        "python3 ../WHdenovo/paftest/convert_to_lemon.py {input.gfa} > {output.lemon}"
 
-
-rule format_json:
+rule compute_path_cover:
     input:
-        json = "regions/json_{technology}/r{region}.json"
+        lemon = "regions/gfas/pruned/r{region}.{subset}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.lemon"
     output:
-        json = "regions/json_{technology}/r{region}.parsed.json"
+        cover = "regions/gfas/pruned/r{region}.{subset}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.cover"
     shell:
-        "cat {input.json} | jq -s '[ [ [ .[] | {{ read: .name, identity: .identity, length: .sequence|length, nodes: [.path.mapping[].position.name]}} | \
-         select(.nodes | length > 1)] | group_by(.read) | .[] | max_by(.length * .identity)] | .[] | select(.identity >= 0.8) ]' > {output.json}"
-
-rule prune_with_nanopore:
-    input:
-        gfa = "regions/gfas/r{region}.reducted.gfa",
-        json = "regions/json_nanopore/r{region}.parsed.json"
-    output:
-        gfa = "regions/gfas_pruned_nanopore/r{region}.min{min_coverage}.gfa"
-    shell:
-        "python3 ../scripts/use_read_alignments.py {input.gfa} {input.json} remove --min_cov {wildcards.min_coverage} > {output.gfa}"
-
-rule prune_with_nanopore_and_pacbio:
-    input:
-        gfa = "regions/gfas/r{region}.reducted.gfa",
-        nanopore = "regions/json_nanopore/r{region}.parsed.json",
-        pacbio = "regions/json_pacbio/r{region}.parsed.json"
-    output:
-        gfa = "regions/gfas_pruned_nanopore_pacbio/r{region}.min{min_coverage}.gfa"
-    shell:
-        "python3 ../scripts/use_read_alignments.py {input.gfa} {input.nanopore} remove --additional_json {input.pacbio} --min_cov {wildcards.min_coverage} > {output.gfa}"
-
-
-rule prune_small_bubbles:
-    input:
-        gfa = "regions/gfas_pruned_nanopore/r{region}.min{min_coverage}.gfa"
-    output:
-        gfa = "regions/gfas_pruned2/r{region}.min{min_coverage}.max{max_size}.gfa"
-    shell:
-        "python3 ../scripts/find_ultrabubbles.py {input.gfa} remove --max_size {wildcards.max_size} > {output.gfa}"
-
-rule plot_bandage_raw:
-    input:
-        graph = "regions/gfas/r{region}.reducted.gfa"
-    output:
-        png = "regions/pngs/r{region}.png"
-    shell:
-        "LINES=$(wc -l < {input.graph}) ; if [ $LINES -gt 0 ]; then /project/pacbiosv/bin/bandage/Bandage image {input.graph} {output.png} --height 4000; else echo '' > {output.png}; fi"
-
-rule plot_bandage_pruned:
-    input:
-        graph = "regions/gfas_{dir_suffix}/r{region}.{file_suffix}.gfa"
-    output:
-        png = "regions/pngs/r{region}_{dir_suffix,pruned_nanopore|pruned_nanopore_pacbio}.{file_suffix}.png"
-    shell:
-        "LINES=$(wc -l < {input.graph}) ; if [ $LINES -gt 0 ]; then /project/pacbiosv/bin/bandage/Bandage image {input.graph} {output.png} --height 4000; else echo '' > {output.png}; fi"
-
+        "../bin/mc-mpc {input.lemon} {output.cover}"
 
 rule extract_contigs:
     input:
-        graph = "regions/gfas/r{region}.reducted.gfa"
+        gfa = "regions/gfas/pruned/r{region}.{subset}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.gfa",
+        lemon = "regions/gfas/pruned/r{region}.{subset}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.lemon",
+        cover = "regions/gfas/pruned/r{region}.{subset}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.cover"
     output:
-        "regions/contigs/r{region}.fa"
+        "regions/contigs/r{region}.{subset}.notips{tip_max_size}.nobubbles{bubble_max_size}.fa"
     shell:
-        "python3 ../scripts/GFAextract_sequence.py {input.graph} > {output}"
+        "python3 ../WHdenovo/paftest/iteratePathsFromCover.py {input.gfa} {input.lemon} {input.cover} > {output}"
+
+rule plot_bandage_raw:
+    input:
+        graph = "regions/gfas/r{region}.{subset}.reducted.gfa"
+    output:
+        png = "regions/pngs/r{region}.{subset}.png"
+    shell:
+        "LINES=$(wc -l < {input.graph}) ; if [ $LINES -gt 0 ]; then ../bin/Bandage image {input.graph} {output.png} --height 4000; else echo '' > {output.png}; fi"
+
+rule plot_bandage_pruned:
+    input:
+        graph = "regions/gfas/pruned/r{region}.{subset}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.gfa"
+    output:
+        png = "regions/pngs/r{region}.{subset}.pruned.notips{tip_max_size}.nobubbles{bubble_max_size}.png"
+    shell:
+        "LINES=$(wc -l < {input.graph}) ; if [ $LINES -gt 0 ]; then ../bin/Bandage image {input.graph} {output.png} --height 4000; else echo '' > {output.png}; fi"
+
+rule ul_align_to_graph:
+    input:
+        graph = "regions/gfas/pruned/r{region}.{subset}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.gfa"
+        nano = "regions/nano/fastas/r{region}.{subset}.fasta"
+    output:
+        aln = "regions/nano/aln/r{region}.{subset}.json"
+    log: "regions/nano/aln/r{region}.{subset}.log"
+    shell:
+        "GraphAligner -g {input.graph} -f {input.nano} --try-all-seeds -t 30 -a {output.aln} --seeds-mxm-length 10 -b 35 1>{log} 2>&1"
 
 rule pool_contigs:
     input:
-        expand("regions/contigs/r{i}.fa", i=range(1, 505))
+        expand("regions/contigs/r{i}.{{subset}}.notips{{tip_max_size}}.nobubbles{{bubble_max_size}}.fa", i=good_regions)
     output:
-        "regions/contigs/pooled.fa"
+        "regions/contigs/pooled.{subset}.notips{tip_max_size}.nobubbles{bubble_max_size}.fa"    
     shell:
         "cat {input} > {output}"
 
@@ -264,3 +230,11 @@ rule map_contigs:
     shell:
         "minimap2 -a -k 19 -O 5,56 -E 4,1 -B 5 -z 400,50 -r 2k -t 10 --eqx --secondary=yes -N 100 -p 0.9 \
         {input.ref} {input.fa} | samtools view -b | samtools sort > {output}"
+
+rule index_bam:
+    input:
+        "regions/contigs/pooled.sorted.bam"
+    output:
+        "regions/contigs/pooled.sorted.bam.bai"
+    shell:
+        "samtools index {input}"
