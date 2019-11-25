@@ -75,7 +75,7 @@ class Graph:
 			print(line, file = f)
 		for edge in self.edges:
 			for target in self.edges[edge]:
-				line = "L\t" + str(edge[0]) + "\t" + ("+" if edge[1] else "-") + "\t" + str(target[0][0]) + '\t' + ("+" if target[0][1] else "-") + '\t' + str(target[1][0])
+				line = "L\t" + str(edge[0]) + "\t" + ("+" if edge[1] else "-") + "\t" + str(target[0][0]) + '\t' + ("+" if target[0][1] else "-") + '\t' + str(target[1][0]) + 'M'
 				if target[1][1]:
 					line += "\tRC:i:" + str(target[1][1])
 				print(line, file = f)
