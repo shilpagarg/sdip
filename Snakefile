@@ -5,12 +5,12 @@ good_regions = [elem for elem in list(range(1, 505)) if not elem in big_regions]
 
 rule all:
     input:
-        expand("regions/pngs/r{i}.{subset}.png", i=good_regions, subset=["primary", "primary.full"]),
+        expand("regions/pngs/r{i}.{subset}.png", i=good_regions, subset=["primary"]),
         expand("regions/pngs/r{i}.{subset}.pruned.notips{tip_max_size}.nobubbles{bubble_max_size}.png", i=good_regions,
-                                                                                                        subset=["primary", "primary.full"],
+                                                                                                        subset=["primary"],
                                                                                                         tip_max_size=[5],
-                                                                                                        bubble_max_size=[5]),
-        expand("regions/contigs/pooled.{subset}.notips{tip_max_size}.nobubbles{bubble_max_size}.fa", subset=["primary", "primary.full"],
+                                                                                                        bubble_max_size=[5])
+        #expand("regions/contigs/pooled.{subset}.notips{tip_max_size}.nobubbles{bubble_max_size}.fa", subset=["primary"],
                                                                                                      tip_max_size=[5],
                                                                                                      bubble_max_size=[5])
 
@@ -51,9 +51,18 @@ rule samtools_index:
     shell:
         "samtools index -@ {threads} {input}"
 
+rule prepare_segdup_regions:
+    input:
+        "../WHdenovo/paftest/segdups.ucsc.tsv"
+    output:
+        "../WHdenovo/paftest/segdups.ucsc.prepared.tsv"
+    threads: 1
+    shell:
+        "python3 ../WHdenovo/paftest/merge_segdup_regions.py {input} > {output}"
+
 rule recruit_primary_reads:
     input:
-        regions = config["regions"],
+        regions = "../WHdenovo/paftest/segdups.ucsc.prepared.tsv",
         bam = "alignment/pooled.bam",
         index = "alignment/pooled.bam.bai"
     output:
@@ -62,7 +71,7 @@ rule recruit_primary_reads:
         primary_mapq_threshold = 1 
     threads: 5
     shell:
-        "chr=`awk '{{if (NR=={wildcards.region}) {{ print $1 }} }}' {input.regions}`; start=`awk '{{ if (NR=={wildcards.region}) {{ print $2 }} }}' {input.regions}`; end=`awk '{{ if (NR=={wildcards.region}) {{ print $3 }} }}' {input.regions}`; samtools view -b -@ {threads} -F 256 -q {params.primary_mapq_threshold} {input.bam} ${{chr}}:${{start}}-${{end}} > {output}"
+        "reg=`awk '{{if ($1=={wildcards.region}) {{ print $2":"$3"-"$4 }} }}' {input.regions}`; samtools view -b -@ {threads} -F 256 -q {params.primary_mapq_threshold} {input.bam} ${{reg}} > {output}"
 
 rule recruit_secondary_reads:
     input:
@@ -73,7 +82,7 @@ rule recruit_secondary_reads:
         temp("regions/bams/r{region,\d+}.secondary.bam")
     threads: 5
     shell:
-        "chr=`awk '{{if (NR=={wildcards.region}) {{ print $1 }} }}' {input.regions}`; start=`awk '{{ if (NR=={wildcards.region}) {{ print $2 }} }}' {input.regions}`; end=`awk '{{ if (NR=={wildcards.region}) {{ print $3 }} }}' {input.regions}`; samtools view -b -@ {threads} -f 256 {input.bam} ${{chr}}:${{start}}-${{end}} > {output}"
+        "reg=`awk '{{if ($1=={wildcards.region}) {{ print $2":"$3"-"$4 }} }}' {input.regions}`; samtools view -b -@ {threads} -f 256 {input.bam} ${{reg}} > {output}"
 
 rule get_read_names:
     input:
@@ -99,7 +108,7 @@ rule merge_primary_and_secondary:
     output:
         "regions/reads/r{region,\d+}.merged.reads"
     shell:
-        "cat {input} > {output}"
+        "cat {input} | sort | uniq > {output}"
 
 rule get_fastq:
     input:
@@ -205,7 +214,7 @@ rule plot_bandage_pruned:
 
 rule ul_align_to_graph:
     input:
-        graph = "regions/gfas/pruned/r{region}.{subset}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.gfa"
+        graph = "regions/gfas/pruned/r{region}.{subset}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.gfa",
         nano = "regions/nano/fastas/r{region}.{subset}.fasta"
     output:
         aln = "regions/nano/aln/r{region}.{subset}.json"
