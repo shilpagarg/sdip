@@ -5,14 +5,14 @@ good_regions = [elem for elem in list(range(1, 505)) if not elem in big_regions]
 
 rule all:
     input:
-        expand("regions/pngs/r{i}.{subset}.png", i=good_regions, subset=["primary"]),
-        expand("regions/pngs/r{i}.{subset}.pruned.notips{tip_max_size}.nobubbles{bubble_max_size}.png", i=good_regions,
+        expand("regions/pngs/r{i}.{subset}.png", i=range(1, 11), subset=["primary"]),
+        expand("regions/pngs/r{i}.{subset}.pruned.notips{tip_max_size}.nobubbles{bubble_max_size}.png", i=range(1, 11),
                                                                                                         subset=["primary"],
                                                                                                         tip_max_size=[5],
                                                                                                         bubble_max_size=[5])
-        #expand("regions/contigs/pooled.{subset}.notips{tip_max_size}.nobubbles{bubble_max_size}.fa", subset=["primary"],
-                                                                                                     tip_max_size=[5],
-                                                                                                     bubble_max_size=[5])
+        # #expand("regions/contigs/pooled.{subset}.notips{tip_max_size}.nobubbles{bubble_max_size}.fa", subset=["primary"],
+        #                                                                                             tip_max_size=[5],
+        #                                                                                             bubble_max_size=[5])
 
 def get_samples(wildcards):
     return config["samples"][wildcards.sample]
@@ -21,7 +21,6 @@ wildcard_constraints:
     region="\d+",
     tip_max_size="\d+",
     bubble_max_size="\d+"
-
 
 rule minimap:
     input:
@@ -51,38 +50,64 @@ rule samtools_index:
     shell:
         "samtools index -@ {threads} {input}"
 
-rule prepare_segdup_regions:
+rule fetch_segdup_sequences:
     input:
-        "../WHdenovo/paftest/segdups.ucsc.tsv"
+        regions = config["regions"],
+        reference = config["genome"]
     output:
-        "../WHdenovo/paftest/segdups.ucsc.prepared.tsv"
-    threads: 1
+        "regions/sequence/r{region}.fa"
     shell:
-        "python3 ../WHdenovo/paftest/merge_segdup_regions.py {input} > {output}"
+        "reg=`awk '{{if (NR=={wildcards.region}) {{ print $1\":\"$2\"-\"$3 }} }}' {input.regions}`; samtools faidx {input.reference} ${{reg}} > {output}"
+
+rule map_segdup_sequences:
+    input:
+        fasta = "regions/sequence/r{region}.fa",
+        reference = config["genome"]
+    output:
+        "regions/sequence/r{region}.bam"
+    threads: 10
+    shell:
+        "minimap2 -ax asm10 -t {threads} --secondary=yes -N 100 -p 0.90 {input.reference} {input.fasta} | samtools view -b | samtools sort > {output}"
+
+rule bamtobed:
+    input:
+        "regions/sequence/r{region}.bam"
+    output:
+        "regions/sequence/r{region}.tsv"
+    shell:
+        "bedtools bamtobed -i {input} | awk 'OFS=\"\\t\" {{ print {wildcards.region}, $0 }}' > {output}"
+
+rule concat_regions:
+    input:
+        expand("regions/sequence/r{region}.tsv", region=range(1,11))
+    output:
+        "segdups.similar.tsv"
+    shell:
+        "cat {input} > {output}"
 
 rule recruit_primary_reads:
     input:
-        regions = "../WHdenovo/paftest/segdups.ucsc.prepared.tsv",
+        regions = "segdups.similar.tsv",
         bam = "alignment/pooled.bam",
         index = "alignment/pooled.bam.bai"
     output:
-        temp("regions/bams/r{region,\d+}.primary.bam")
+        "regions/bams/r{region,\d+}.primary.bam"
     params:
         primary_mapq_threshold = 1 
     threads: 5
     shell:
-        "reg=`awk '{{if ($1=={wildcards.region}) {{ print $2":"$3"-"$4 }} }}' {input.regions}`; samtools view -b -@ {threads} -F 256 -q {params.primary_mapq_threshold} {input.bam} ${{reg}} > {output}"
+        "reg=`awk '{{if ($1=={wildcards.region}) {{ print $2\":\"$3\"-\"$4 }} }}' {input.regions}`; samtools view -b -@ {threads} -F 256 -q {params.primary_mapq_threshold} {input.bam} ${{reg}} > {output}"
 
 rule recruit_secondary_reads:
     input:
-        regions = config["regions"],
+        regions = "segdups.similar.tsv",
         bam = "alignment/pooled.bam",
         index = "alignment/pooled.bam.bai"
     output:
-        temp("regions/bams/r{region,\d+}.secondary.bam")
+        "regions/bams/r{region,\d+}.secondary.bam"
     threads: 5
     shell:
-        "reg=`awk '{{if ($1=={wildcards.region}) {{ print $2":"$3"-"$4 }} }}' {input.regions}`; samtools view -b -@ {threads} -f 256 {input.bam} ${{reg}} > {output}"
+        "reg=`awk '{{if ($1=={wildcards.region}) {{ print $2\":\"$3\"-\"$4 }} }}' {input.regions}`; samtools view -b -@ {threads} -f 256 {input.bam} ${{reg}} > {output}"
 
 rule get_read_names:
     input:
