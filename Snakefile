@@ -2,11 +2,13 @@ configfile: "config.yaml"
 # ftp://ftp-trace.ncbi.nlm.nih.gov/giab/ftp/data/AshkenazimTrio/HG002_NA24385_son/UCSC_Ultralong_OxfordNanopore_Promethion/
 big_regions = [17, 32, 96, 101, 102, 108, 162, 166, 216, 217, 218, 267, 268, 275, 278, 285, 296, 306, 307, 433, 467, 470, 471, 503, 504]
 good_regions = [elem for elem in list(range(1, 505)) if not elem in big_regions]
+regions = range(1,100)
+
 
 rule all:
     input:
-        expand("regions/pngs/r{i}.{subset}.png", i=range(1, 11), subset=["primary"]),
-        expand("regions/pngs/r{i}.{subset}.pruned.notips{tip_max_size}.nobubbles{bubble_max_size}.png", i=range(1, 11),
+        expand("regions/pngs/r{i}.{subset}.png", i=regions, subset=["primary"]),
+        expand("regions/pngs/r{i}.{subset}.pruned.notips{tip_max_size}.nobubbles{bubble_max_size}.png", i=regions,
                                                                                                         subset=["primary"],
                                                                                                         tip_max_size=[5],
                                                                                                         bubble_max_size=[5])
@@ -55,31 +57,31 @@ rule fetch_segdup_sequences:
         regions = config["regions"],
         reference = config["genome"]
     output:
-        "regions/sequence/r{region}.fa"
+        "regions/segdups/r{region}.fa"
     shell:
         "reg=`awk '{{if (NR=={wildcards.region}) {{ print $1\":\"$2\"-\"$3 }} }}' {input.regions}`; samtools faidx {input.reference} ${{reg}} > {output}"
 
 rule map_segdup_sequences:
     input:
-        fasta = "regions/sequence/r{region}.fa",
+        fasta = "regions/segdups/r{region}.fa",
         reference = config["genome"]
     output:
-        "regions/sequence/r{region}.bam"
+        "regions/segdups/r{region}.bam"
     threads: 10
     shell:
-        "minimap2 -ax asm10 -t {threads} --secondary=yes -N 100 -p 0.90 {input.reference} {input.fasta} | samtools view -b | samtools sort > {output}"
+        "minimap2 -ax asm10 -t {threads} --secondary=yes -N 100 -p 0.80 {input.reference} {input.fasta} | samtools view -b | samtools sort > {output}"
 
 rule bamtobed:
     input:
-        "regions/sequence/r{region}.bam"
+        "regions/segdups/r{region}.bam"
     output:
-        "regions/sequence/r{region}.tsv"
+        "regions/segdups/r{region}.tsv"
     shell:
         "bedtools bamtobed -i {input} | awk 'OFS=\"\\t\" {{ print {wildcards.region}, $0 }}' > {output}"
 
 rule concat_regions:
     input:
-        expand("regions/sequence/r{region}.tsv", region=range(1,11))
+        expand("regions/segdups/r{region}.tsv", region=regions)
     output:
         "segdups.similar.tsv"
     shell:
@@ -192,6 +194,9 @@ rule prune_graph:
         """python3 ../WHdenovo/paftest/remove_tips.py {input.gfa} remove --max_size {wildcards.tip_max_size} | \
            python3 ../WHdenovo/paftest/find_ultrabubbles.py remove --max_size {wildcards.bubble_max_size} | \
            python3 ../WHdenovo/paftest/remove_tips.py remove --max_size {wildcards.tip_max_size} | \
+           python3 ../WHdenovo/paftest/find_ultrabubbles.py remove --max_size {wildcards.bubble_max_size} | \
+           python3 ../WHdenovo/paftest/remove_tips.py remove --max_size {wildcards.tip_max_size} | \
+           python3 ../WHdenovo/paftest/removeDegree3.py | \
            python3 ../WHdenovo/paftest/find_ultrabubbles.py remove --max_size {wildcards.bubble_max_size} | \
            python3 ../WHdenovo/paftest/remove_tips.py remove --max_size {wildcards.tip_max_size} > {output.gfa}"""
 
