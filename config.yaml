@@ -1,52 +1,9 @@
-samples:
-    m54238_180901_011437: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54238_180901_011437.Q20.fastq
-    m54238_180902_013549: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54238_180902_013549.Q20.fastq
-    m54238_180903_015530: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54238_180903_015530.Q20.fastq
-    m54238_180904_021549: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54238_180904_021549.Q20.fastq
-    m54238_180907_170406: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54238_180907_170406.Q20.fastq
-    m54238_180908_172515: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54238_180908_172515.Q20.fastq
-    m54238_180909_174539: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54238_180909_174539.Q20.fastq
-    m54238_180910_180559: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54238_180910_180559.Q20.fastq
-    m54238_180913_181445: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54238_180913_181445.Q20.fastq
-    m54238_180914_183539: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54238_180914_183539.Q20.fastq
-    m54238_180915_185611: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54238_180915_185611.Q20.fastq
-    m54238_180916_191625: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54238_180916_191625.Q20.fastq
-    m54238_180919_165326: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54238_180919_165326.Q20.fastq
-    m54238_180920_171425: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54238_180920_171425.Q20.fastq
-    m54238_180921_173448: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54238_180921_173448.Q20.fastq
-    m54238_180922_175520: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54238_180922_175520.Q20.fastq
-    m54238_180925_225123: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54238_180925_225123.Q20.fastq
-    m54238_180926_231301: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54238_180926_231301.Q20.fastq
-    m54238_180927_233325: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54238_180927_233325.Q20.fastq
-    m54328_180921_232856: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54328_180921_232856.Q20.fastq
-    m54328_180922_235017: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54328_180922_235017.Q20.fastq
-    m54328_180924_001027: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54328_180924_001027.Q20.fastq
-    m54328_180925_003051: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54328_180925_003051.Q20.fastq
-    m54328_180926_222309: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54328_180926_222309.Q20.fastq
-    m54328_180927_224427: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54328_180927_224427.Q20.fastq
-    m54328_180928_230446: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54328_180928_230446.Q20.fastq
-    m54328_180929_232524: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54328_180929_232524.Q20.fastq
-    m54329_180924_222717: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54329_180924_222717.Q20.fastq
-    m54329_180925_224838: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54329_180925_224838.Q20.fastq
-    m54329_180926_230856: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54329_180926_230856.Q20.fastq
-    m54329_180927_232921: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54329_180927_232921.Q20.fastq
-    m54334_180924_221206: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54334_180924_221206.Q20.fastq
-    m54334_180925_223328: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54334_180925_223328.Q20.fastq
-    m54334_180926_225337: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54334_180926_225337.Q20.fastq
-    m54334_180927_231334: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54334_180927_231334.Q20.fastq
-    m54335_180924_221150: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54335_180924_221150.Q20.fastq
-    m54335_180925_223313: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54335_180925_223313.Q20.fastq
-    m54335_180926_225328: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54335_180926_225328.Q20.fastq
-    m54335_180927_231344: /project/pacbiosv/data/HG002_pacbio_ccs/fastq/m54335_180927_231344.Q20.fastq
-
 genome:
-    /project/heller_d-data/genomes/hg38/hg38.fa.gz
+    /lustre/scratch115/realdata/mdt3/projects/graphs/yeast/erik/final_exp/segdup/david/ref/GCA_000001405.15_GRCh38_no_alt_analysis_set.fa
 
 regions:
-    /project/heller_d-data/shilpa/table8_all.15kbWindow.merged.bed
+    /lustre/scratch115/realdata/mdt3/projects/graphs/yeast/erik/final_exp/segdup/david/ccs_vs_hg38/table8_all.15kbWindow.merged.bed
 
 reads:
-    /project/pacbiosv/data/HG002_pacbio_ccs/fastq/allreads.fastq
-
-nanopore_reads:
-    /project/pacbiosv/data/HG002_nanopore_ultralong/fastq/reads.fastq
+    pacbio: /lustre/scratch115/realdata/mdt3/projects/graphs/yeast/erik/final_exp/segdup/david/reads.pacbio.fastq
+    nanopore: /lustre/scratch115/realdata/mdt3/projects/graphs/yeast/erik/final_exp/segdup/david/reads.nanopore.fastq
