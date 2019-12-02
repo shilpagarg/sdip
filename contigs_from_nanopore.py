@@ -25,23 +25,19 @@ def readGFA(gfaFile):
             node2 = fields[3]
             node2dir = fields[4]
             ovlp = int(fields[5][:-1])
-            node1len = int(fields[6])
-            node2len = int(fields[7])
-            edges.append((node1, node1dir, node2, node2dir, ovlp, node1len, node2len))
+            edges.append((node1, node1dir, node2, node2dir, ovlp))
 
     G = Graph()
     nxg = nx.Graph()
-    for node1, node1dir, node2, node2dir, ovlp, node1len, node2len in edges:
+    for node1, node1dir, node2, node2dir, ovlp in edges:
         if node1 not in G.nodemap:
             n1_seq = nodesSeq[node1]
-            assert(len(n1_seq) == node1len)
-            n1 = Node(node1, node1len, n1_seq)
+            n1 = Node(node1, len(n1_seq), n1_seq)
         else:
             n1 = G.nodemap[node1]
         if node2 not in G.nodemap:
             n2_seq = nodesSeq[node2]
-            assert(len(n2_seq) == node2len)
-            n2 = Node(node2, node1len, n2_seq)
+            n2 = Node(node2, len(n2_seq), n2_seq)
         else:
             n2 = G.nodemap[node2]
         G.addEdge(n1, node1dir, n2, node2dir, ovlp)
@@ -89,9 +85,9 @@ def main():
     longreads = f.readlines()
     G, nxg = readGFA(args.gfa)
     #components = divide(nxg)
-    print("Start computing paths..", file=sys.stderr)
+    print("Start computing all paths..", file=sys.stderr)
     paths = G.getAllPaths()
-    print("Computed %d paths." % len(paths), file=sys.stderr)
+    print("Computed in total %d paths." % len(paths), file=sys.stderr)
     paths_between_tips = defaultdict(list)
     tips = []
     for path in paths:
@@ -109,15 +105,15 @@ def main():
     hap_count = 0
 
     out = open(args.fa, 'w')
-    for (tip1, tip2), paths in paths_between_tips.items():
-        paths_with_lengths = sorted([(G.getPathSeqLength(path), path) for path in paths], key=lambda entry: entry[0])
-        print('Found %d paths between %s and %s, longest sequence length %d' % (len(paths_with_lengths), tip1, tip2, paths_with_lengths[-1][0]), file=sys.stderr)
-        longest_path = paths_with_lengths[-1][1]
-        input_file_name_prefix = "_".join(args.gfa.split("/")[-1].split(".")[:-1])
-    hap_count = 0
+#    for (tip1, tip2), paths in paths_between_tips.items():
+#        paths_with_lengths = sorted([(G.getPathSeqLength(path), path) for path in paths], key=lambda entry: entry[0])
+#        print('Found %d paths between %s and %s, longest sequence length %d' % (len(paths_with_lengths), tip1, tip2, paths_with_lengths[-1][0]), file=sys.stderr)
+#        longest_path = paths_with_lengths[-1][1]
+#        input_file_name_prefix = "_".join(args.gfa.split("/")[-1].split(".")[:-1])
+#    hap_count = 0
+    input_file_name_prefix = "_".join(args.gfa.split("/")[-1].split(".")[:-1])
     for i in range(len(tips)):
         for j in range(i+1,len(tips)):
-            goodpaths = []
             edges1 = list(nx.bfs_edges(nxg, tips[i], depth_limit=2))
             edges2 = list(nx.bfs_edges(nxg, tips[j], depth_limit=2))
             _, threeawaytip1 = edges1[1]
@@ -126,6 +122,7 @@ def main():
                 if threeawaytip1 in line and threeawaytip2 in line:
                     tips1 = min(tips[i], tips[j])
                     tips2 = max(tips[i], tips[j])
+                    print('Found %d paths between %s and %s' % (len(paths_between_tips[(tips1,tips2)]), tips1, tips2), file=sys.stderr)
                     for path in paths_between_tips[(tips1,tips2)]:
                         hap_count += 1
                         out.write('>%s_hap%d\n' % (input_file_name_prefix, hap_count))

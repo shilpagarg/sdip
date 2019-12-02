@@ -167,7 +167,7 @@ rule prune_graph:
         """python3 ../WHdenovo/paftest/prune_tips.py {input.gfa} remove --max_size {wildcards.tip_max_size} | \
            python3 ../WHdenovo/paftest/prune_ultrabubbles.py remove --max_size {wildcards.bubble_max_size} | \
            python3 ../WHdenovo/paftest/prune_tips.py remove --max_size {wildcards.tip_max_size} | \
-           python3 ../WHdenovo/paftest/prune_ultrabubbles.py remove --max_size {wildcards.bubble_max_size} | \
+           python3 ../WHdenovo/paftest/prune_ultrabubb  les.py remove --max_size {wildcards.bubble_max_size} | \
            python3 ../WHdenovo/paftest/prune_tips.py remove --max_size {wildcards.tip_max_size} | \
            python3 ../WHdenovo/paftest/prune_degree3.py | \
            python3 ../WHdenovo/paftest/prune_ultrabubbles.py remove --max_size {wildcards.bubble_max_size} | \
@@ -233,7 +233,7 @@ rule extract_contigs_from_cover:
     output:
         "regions/contigs/r{region}.notips{tip_max_size}.nobubbles{bubble_max_size}.fa"
     shell:
-        "python3 ../WHdenovo/paftest/iteratePathsFromCover.py {input.gfa} {input.lemon} {input.cover} > {output}"
+        "python3 ../WHdenovo/paftest/contigs_from_path_cover.py {input.gfa} {input.lemon} {input.cover} > {output}"
 
 # rule extract_contigs_from_nanopore_alignments:
 #     input:
@@ -243,7 +243,7 @@ rule extract_contigs_from_cover:
 #     output:
 #         "regions/contigs/r{region}.notips{tip_max_size}.nobubbles{bubble_max_size}.fa"
 #     shell:
-#         "python3 ../WHdenovo/paftest/iteratePathsFromCover.py {input.gfa} {input.lemon} {input.cover} > {output}"
+#         "python3 ../WHdenovo/paftest/contigs_from_nanopore.py {input.gfa} {input.lemon} {input.cover} > {output}"
 
 
 #############
