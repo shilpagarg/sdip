@@ -164,14 +164,14 @@ rule prune_graph:
     output:        
         gfa = "regions/gfas/pruned/r{region}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.gfa"
     shell:
-        """python3 ../WHdenovo/paftest/remove_tips.py {input.gfa} remove --max_size {wildcards.tip_max_size} | \
-           python3 ../WHdenovo/paftest/find_ultrabubbles.py remove --max_size {wildcards.bubble_max_size} | \
-           python3 ../WHdenovo/paftest/remove_tips.py remove --max_size {wildcards.tip_max_size} | \
-           python3 ../WHdenovo/paftest/find_ultrabubbles.py remove --max_size {wildcards.bubble_max_size} | \
-           python3 ../WHdenovo/paftest/remove_tips.py remove --max_size {wildcards.tip_max_size} | \
-           python3 ../WHdenovo/paftest/removeDegree3.py | \
-           python3 ../WHdenovo/paftest/find_ultrabubbles.py remove --max_size {wildcards.bubble_max_size} | \
-           python3 ../WHdenovo/paftest/remove_tips.py remove --max_size {wildcards.tip_max_size} > {output.gfa}"""
+        """python3 ../WHdenovo/paftest/prune_tips.py {input.gfa} remove --max_size {wildcards.tip_max_size} | \
+           python3 ../WHdenovo/paftest/prune_ultrabubbles.py remove --max_size {wildcards.bubble_max_size} | \
+           python3 ../WHdenovo/paftest/prune_tips.py remove --max_size {wildcards.tip_max_size} | \
+           python3 ../WHdenovo/paftest/prune_ultrabubbles.py remove --max_size {wildcards.bubble_max_size} | \
+           python3 ../WHdenovo/paftest/prune_tips.py remove --max_size {wildcards.tip_max_size} | \
+           python3 ../WHdenovo/paftest/prune_degree3.py | \
+           python3 ../WHdenovo/paftest/prune_ultrabubbles.py remove --max_size {wildcards.bubble_max_size} | \
+           python3 ../WHdenovo/paftest/prune_tips.py remove --max_size {wildcards.tip_max_size} > {output.gfa}"""
 
 #################
 #Extract contigs#
