@@ -17,6 +17,7 @@ def main():
 	graph.remove_nonexistent_edges()
 
 	edge_removed = True
+	print("Start pruning paths between high-degree nodes..", file=sys.stderr)
 	while edge_removed:
 		edge_removed = False
 		high_degree_nodes = []
@@ -68,6 +69,7 @@ def main():
 						else:
 							stack.append(path + [(nxt, nxt_dir)])
 					
+	print("Done.", file=sys.stderr)
 	graph.write(sys.stdout)
 
 if __name__ == '__main__':

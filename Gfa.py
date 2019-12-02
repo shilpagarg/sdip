@@ -45,11 +45,9 @@ class Graph:
 				overlap = int(parts[5][:-1])
 				if frompos not in self.edges: self.edges[frompos] = set()
 				if reverse(topos) not in self.edges: self.edges[reverse(topos)] = set()
-				readcount = None
-				for tag in parts[6:]:
-					if tag[0:5] == "RC:i:": readcount = float(tag[5:])
-				self.edges[reverse(topos)].add((reverse(frompos), (overlap, readcount)))
-				self.edges[frompos].add((topos, (overlap, readcount)))
+				tags = parts[6:]
+				self.edges[reverse(topos)].add((reverse(frompos), (overlap, "\t".join(tags))))
+				self.edges[frompos].add((topos, (overlap, "\t".join(tags))))
 	def remove_nonexistent_edges(self):
 		extra = []
 		for edge in self.edges:
@@ -75,7 +73,5 @@ class Graph:
 			print(line, file = f)
 		for edge in self.edges:
 			for target in self.edges[edge]:
-				line = "L\t" + str(edge[0]) + "\t" + ("+" if edge[1] else "-") + "\t" + str(target[0][0]) + '\t' + ("+" if target[0][1] else "-") + '\t' + str(target[1][0]) + 'M'
-				if target[1][1]:
-					line += "\tRC:i:" + str(target[1][1])
+				line = "L\t" + str(edge[0]) + "\t" + ("+" if edge[1] else "-") + "\t" + str(target[0][0]) + '\t' + ("+" if target[0][1] else "-") + '\t' + str(target[1][0]) + 'M' + "\t" + target[1][1]
 				print(line, file = f)

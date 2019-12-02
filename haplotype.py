@@ -813,7 +813,7 @@ def draw2(fasta, Llines, out, haveDoneTR):
             ops_parsed = [(int(op[:-1]), op[-1]) for op in ops]
             len_overlap_first = sum([l for l, op in ops_parsed if op == "M" or op == "D"])
             len_overlap_second = sum([l for l, op in ops_parsed if op == "M" or op == "I"])
-            content = 'L\t' + '\t'.join([Lline[0], Lline[4], Lline[5], Lline[9], str(min(len_overlap_first, len_overlap_second)) + "M", str(Lline[1]), str(Lline[6]), str(Lline[-2]), Lline[-1]]) + '\n'
+            content = 'L\t' + '\t'.join([Lline[0], Lline[4], Lline[5], Lline[9], str(min(len_overlap_first, len_overlap_second)) + "M", str(Lline[1]), str(Lline[6]), cigar, str(Lline[-2]), Lline[-1]]) + '\n'
         
         out.write(content)
     for record in SeqIO.parse(fasta, 'fasta'):
