@@ -10,8 +10,9 @@ class Graph(object):
     def __init__(self, ):
         self.nodemap = {}
         self.edgeOvlp = {}
+        self.edgeCigar = {}
 
-    def addEdge(self, node1, node1dir, node2, node2dir, ovlp):
+    def addEdge(self, node1, node1dir, node2, node2dir, ovlp, cigar):
         self.nodemap[node1.name] = node1
         self.nodemap[node2.name] = node2
 
@@ -26,6 +27,8 @@ class Graph(object):
 
         self.edgeOvlp[(node1.name, node2.name)] = ovlp
         self.edgeOvlp[(node2.name, node1.name)] = ovlp
+        self.edgeCigar[(node1.name, node2.name)] = cigar
+        self.edgeCigar[(node2.name, node1.name)] = cigar
 
     def removeLonelyNodes(self):
         lonely_nodes = []
