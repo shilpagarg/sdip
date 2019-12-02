@@ -56,7 +56,7 @@ def remove_uncovered_edges(G, cover_dict):
 				G.nodemap[name2].Enodes.discard(name1)
 			del G.edgeOvlp[(name1, name2)]
 			removed_edges.append(edge)
-			print("Remove edge between", name1, "+" if dir1 else "-", "and", name2, "-" if dir2 else "-", file=sys.stderr)
+            #print("Remove edge between", name1, "+" if dir1 else "-", "and", name2, "-" if dir2 else "-", file=sys.stderr)
 	for edge in removed_edges:
 		del cover_dict[edge]
 
@@ -64,7 +64,7 @@ def getPathsFromPathCover(G, cover_dict):
 	paths = []
 	while len(G.nodemap) > 0:
 		startOrEndNodes = list(G.getStartOrEndNodes())
-		print("Current start/end nodes:", startOrEndNodes, file=sys.stderr)		
+        #print("Current start/end nodes:", startOrEndNodes, file=sys.stderr)
 		first_node = startOrEndNodes[0]
 		if G.nodemap[first_node].Enodes == set() and G.nodemap[first_node].Bnodes != set():
 			current_path = [(first_node, '-')]
@@ -92,7 +92,7 @@ def getPathsFromPathCover(G, cover_dict):
 					cover_dict[((last_node, last_dir), (nxt_node, nxt_dir))] -= 1
 					current_path.append((nxt_node, nxt_dir))
 				else:
-					print("Reached end: ", ",".join([node + ("+" if direction else "-") for node, direction in current_path]), file=sys.stderr)
+                    #print("Reached end: ", ",".join([node + ("+" if direction else "-") for node, direction in current_path]), file=sys.stderr)
 					paths.append(current_path)
 					break
 			else:
@@ -112,7 +112,7 @@ def getPathsFromPathCover(G, cover_dict):
 					cover_dict[((last_node, last_dir), (nxt_node, nxt_dir))] -= 1
 					current_path.append((nxt_node, nxt_dir))
 				else:
-					print("Reached end: ", ",".join([node + ("+" if direction else "-") for node, direction in current_path]), file=sys.stderr)
+                    #print("Reached end: ", ",".join([node + ("+" if direction else "-") for node, direction in current_path]), file=sys.stderr)
 					paths.append(current_path)
 					break
 		remove_uncovered_edges(G, cover_dict)

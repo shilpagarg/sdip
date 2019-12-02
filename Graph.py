@@ -34,7 +34,7 @@ class Graph(object):
                 lonely_nodes.append(name)
         for name in lonely_nodes:
             del self.nodemap[name]
-            print("Removed lonely node", name, file=sys.stderr)
+            #print("Removed lonely node", name, file=sys.stderr)
 
     def getStartOrEndNodes(self):
         startOrEnd = set()
