@@ -2,17 +2,19 @@ configfile: "../WHdenovo/paftest/config.yaml"
 # ftp://ftp-trace.ncbi.nlm.nih.gov/giab/ftp/data/AshkenazimTrio/HG002_NA24385_son/UCSC_Ultralong_OxfordNanopore_Promethion/
 big_regions = [17, 32, 96, 101, 102, 108, 162, 166, 216, 217, 218, 267, 268, 275, 278, 285, 296, 306, 307, 433, 467, 470, 471, 503, 504]
 good_regions = [elem for elem in list(range(1, 505)) if not elem in big_regions]
-regions = range(1,100)
+regions = good_regions
 
 
 rule all:
     input:
         expand("regions/pngs/r{i}.png", i=regions),
         expand("regions/pngs/r{i}.pruned.notips{tip_max_size}.nobubbles{bubble_max_size}.png", i=regions,
-                                                                                                        tip_max_size=[5],
-                                                                                                        bubble_max_size=[5])
-        # expand("regions/contigs/pooled.notips{tip_max_size}.nobubbles{bubble_max_size}.fa", tip_max_size=[5],
-        #                                                                                             bubble_max_size=[5])
+                                                                                               tip_max_size=[5],
+                                                                                               bubble_max_size=[5]),
+        expand("regions/contigs/pooled.notips{tip_max_size}.nobubbles{bubble_max_size}.fa", tip_max_size=[5],
+                                                                                            bubble_max_size=[5]),
+        expand("regions/jsons/r{region}.notips5.nobubbles5.json", region = regions),
+        "regions/stats/cover.notips5.nobubbles5.txt"
 
 def get_samples(wildcards):
     return config["samples"][wildcards.sample]
@@ -191,19 +193,41 @@ rule compute_path_cover:
     shell:
         "../bin/mc-mpc {input.lemon} {output.cover}"
 
+rule cover_statistics:
+    input:
+        expand("regions/gfas/pruned/r{region}.reducted.notips{{tip_max_size}}.nobubbles{{bubble_max_size}}.cover", region = regions)
+    output:
+        "regions/stats/cover.notips{tip_max_size}.nobubbles{bubble_max_size}.txt"
+    run:
+        max_covers = []
+        for i in input:
+            input_file = open(i, "r")
+            max_cover = -1
+            for line in input_file:
+                fields = line.strip().split()
+                if int(fields[1]) > max_cover:
+                    max_cover = int(fields[1])
+            input_file.close()
+            max_covers.append(max_cover)
+        output_file = open(output[0], "w")
+        for i, m in enumerate(max_covers):
+            print("%d\t%d" % (i+1, m), file=output_file)
+        output_file.close()
+
 rule ul_align_to_graph:
     input:
         graph = "regions/gfas/pruned/r{region}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.gfa",
         nano = "regions/fastas_nanopore/r{region}.fasta"
     output:
-        aln = "regions/jsons/r{region}.json"
-    log: "regions/logs/nanopore_alignment/r{region}.log"
+        aln = "regions/jsons/r{region}.notips{tip_max_size}.nobubbles{bubble_max_size}.json"
+    log: "regions/logs/nanopore_alignment/r{region}.notips{tip_max_size}.nobubbles{bubble_max_size}.log"
+    threads: 10
     shell:
-        "GraphAligner -g {input.graph} -f {input.nano} --try-all-seeds -t 30 -a {output.aln} --seeds-mxm-length 10 -b 35 1>{log} 2>&1"
+        "GraphAligner -g {input.graph} -f {input.nano} --try-all-seeds -t {threads} -a {output.aln} --seeds-mxm-length 10 -b 35 1>{log} 2>&1"
 
 rule extract_contigs_from_cover:
     input:
-        gfa = "regions/gfas/pruned/r{region}reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.gfa",
+        gfa = "regions/gfas/pruned/r{region}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.gfa",
         lemon = "regions/gfas/pruned/r{region}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.lemon",
         cover = "regions/gfas/pruned/r{region}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.cover"
     output:
@@ -211,15 +235,15 @@ rule extract_contigs_from_cover:
     shell:
         "python3 ../WHdenovo/paftest/iteratePathsFromCover.py {input.gfa} {input.lemon} {input.cover} > {output}"
 
-rule extract_contigs_from_nanopore_alignments:
-    input:
-        gfa = "regions/gfas/pruned/r{region}reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.gfa",
-        lemon = "regions/gfas/pruned/r{region}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.lemon",
-        cover = "regions/gfas/pruned/r{region}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.cover"
-    output:
-        "regions/contigs/r{region}.notips{tip_max_size}.nobubbles{bubble_max_size}.fa"
-    shell:
-        "python3 ../WHdenovo/paftest/iteratePathsFromCover.py {input.gfa} {input.lemon} {input.cover} > {output}"
+# rule extract_contigs_from_nanopore_alignments:
+#     input:
+#         gfa = "regions/gfas/pruned/r{region}reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.gfa",
+#         lemon = "regions/gfas/pruned/r{region}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.lemon",
+#         cover = "regions/gfas/pruned/r{region}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.cover"
+#     output:
+#         "regions/contigs/r{region}.notips{tip_max_size}.nobubbles{bubble_max_size}.fa"
+#     shell:
+#         "python3 ../WHdenovo/paftest/iteratePathsFromCover.py {input.gfa} {input.lemon} {input.cover} > {output}"
 
 
 #############
@@ -248,7 +272,7 @@ rule plot_bandage_pruned:
 
 rule pool_contigs:
     input:
-        expand("regions/contigs/r{i}.notips{{tip_max_size}}.nobubbles{{bubble_max_size}}.fa", i=good_regions)
+        expand("regions/contigs/r{i}.notips{{tip_max_size}}.nobubbles{{bubble_max_size}}.fa", i=regions)
     output:
         "regions/contigs/pooled.notips{tip_max_size}.nobubbles{bubble_max_size}.fa"    
     shell:

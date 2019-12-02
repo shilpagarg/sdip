@@ -28,7 +28,7 @@ def main():
 		for start in high_degree_nodes:
 			if edge_removed:
 				break
-			print("Start with node " + start, file=sys.stderr)
+            #print("Start with node " + start, file=sys.stderr)
 			stack = []
 			if len(graph.edges[(start, True)]) > 1:
 				stack.append([(start, True)])
@@ -50,7 +50,7 @@ def main():
 								if len(path) == 1:
 									graph.edges[(last_node, last_orientation)].remove(((nxt, nxt_dir), infos))
 									graph.edges[(nxt, not nxt_dir)].remove(((last_node, not last_orientation), infos))
-									print("Remove edge between %s,%s" % (last_node, nxt), file=sys.stderr)
+                                    #print("Remove edge between %s,%s" % (last_node, nxt), file=sys.stderr)
 									edge_removed = True
 									break
 						else:
@@ -62,7 +62,7 @@ def main():
 								if len(path) == 1:
 									graph.edges[(last_node, last_orientation)].remove(((nxt, nxt_dir), infos))
 									graph.edges[(nxt, not nxt_dir)].remove(((last_node, not last_orientation), infos))
-									print("Remove edge between %s,%s" % (last_node, nxt), file=sys.stderr)
+                                    #print("Remove edge between %s,%s" % (last_node, nxt), file=sys.stderr)
 									edge_removed = True
 									break
 						else:
