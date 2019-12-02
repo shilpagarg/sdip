@@ -89,6 +89,7 @@ def main():
 	graph.remove_nonexistent_edges()
 
 	bubbles = []
+	print("Start finding bubbles..", file=sys.stderr)
 	for n in graph.nodes:
 		bubble = detect_bubble(graph, (n, True))
 		if bubble:
@@ -96,6 +97,7 @@ def main():
 		bubble = detect_bubble(graph, (n, False))
 		if bubble:
 			bubbles.append(bubble)
+	print("Found %d bubbles of size > %d" % (len([bubble for bubble in bubbles if bubble[2] <= args.max_size or args.max_size == -1]), args.max_size), file=sys.stderr)
 
 	if args.action == "list":
 		for bubble in bubbles:
