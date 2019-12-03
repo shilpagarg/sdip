@@ -45,8 +45,10 @@ def readGFA(gfaFile):
 	return G, nxg
 
 def lookup_nodename(lemon_id, nodemap):
-	matching_nodes = [key for key in nodemap.keys() if key.split("/")[1] == lemon_id]
-	assert(len(matching_nodes) == 1)
+	zmw_hole = lemon_id[:4]
+	run_time = lemon_id[4:8]
+	matching_nodes = [key for key in nodemap.keys() if (key.split("/")[1][-4:] == zmw_hole) and (key.split("/")[0][-4:] == run_time)]
+	assert len(matching_nodes) == 1, "Number of matching nodes is not 1 for lemon_id %s." % (lemon_id)
 	return matching_nodes[0]
 
 def remove_uncovered_edges(G, cover_dict):
