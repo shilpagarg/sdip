@@ -63,6 +63,13 @@ class Graph:
 				self.edges[edge].remove(e)
 		for e in extra:
 			del self.edges[e]
+	def get_high_degree_nodes(self, min_degree=3):
+		high_degree_nodes = []
+		for n in self.nodes:
+			targets = self.edges[(n, True)].union(self.edges[(n, False)])
+			if len(targets) >= min_degree:
+				high_degree_nodes.append(n)
+		return high_degree_nodes
 	def write(self, f):
 		for node in self.nodes:
 			n = self.nodes[node]

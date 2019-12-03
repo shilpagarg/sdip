@@ -8,12 +8,13 @@ regions = good_regions
 rule all:
     input:
         expand("regions/pngs/r{i}.png", i=regions),
-        expand("regions/pngs/r{i}.pruned.notips{tip_max_size}.nobubbles{bubble_max_size}.png", i=regions,
-                                                                                               tip_max_size=[5],
-                                                                                               bubble_max_size=[5]),
-        expand("regions/contigs/pooled.notips{tip_max_size}.nobubbles{bubble_max_size}.fa", tip_max_size=[5],
-                                                                                            bubble_max_size=[5]),
-        expand("regions/jsons/r{region}.notips5.nobubbles5.json", region = regions),
+        expand("regions/pngs/r{i}.pruned.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.png", i=regions,
+                                                                                                     tip_max_size=[5],
+                                                                                                     bubble_max_size=[5],
+                                                                                                     degree_max_size=[2]),
+        expand("regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.fa", tip_max_size=[5],
+                                                                                                  bubble_max_size=[5],
+                                                                                                  degree_max_size=[2]),
         "regions/stats/cover.notips5.nobubbles5.txt"
 
 def get_samples(wildcards):
@@ -162,14 +163,14 @@ rule prune_graph:
     input:
         gfa = "regions/gfas/r{region}.reducted.gfa"
     output:        
-        gfa = "regions/gfas/pruned/r{region}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.gfa"
+        gfa = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.gfa"
     shell:
         """python3 ../WHdenovo/paftest/prune_tips.py {input.gfa} remove --max_size {wildcards.tip_max_size} | \
            python3 ../WHdenovo/paftest/prune_ultrabubbles.py remove --max_size {wildcards.bubble_max_size} | \
            python3 ../WHdenovo/paftest/prune_tips.py remove --max_size {wildcards.tip_max_size} | \
            python3 ../WHdenovo/paftest/prune_ultrabubbles.py remove --max_size {wildcards.bubble_max_size} | \
            python3 ../WHdenovo/paftest/prune_tips.py remove --max_size {wildcards.tip_max_size} | \
-           python3 ../WHdenovo/paftest/prune_degree3.py | \
+           python3 ../WHdenovo/paftest/prune_degree3.py --max_size {wildcards.degree_max_size} | \
            python3 ../WHdenovo/paftest/prune_ultrabubbles.py remove --max_size {wildcards.bubble_max_size} | \
            python3 ../WHdenovo/paftest/prune_tips.py remove --max_size {wildcards.tip_max_size} > {output.gfa}"""
 
@@ -179,25 +180,25 @@ rule prune_graph:
 
 rule convert_lemon:
     input:
-        gfa = "regions/gfas/pruned/r{region}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.gfa"
+        gfa = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.gfa"
     output:
-        lemon = "regions/gfas/pruned/r{region}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.lemon"
+        lemon = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.lemon"
     shell:
         "python3 ../WHdenovo/paftest/convert_to_lemon.py {input.gfa} > {output.lemon}"
 
 rule compute_path_cover:
     input:
-        lemon = "regions/gfas/pruned/r{region}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.lemon"
+        lemon = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.lemon"
     output:
-        cover = "regions/gfas/pruned/r{region}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.cover"
+        cover = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.cover"
     shell:
         "../bin/mc-mpc {input.lemon} {output.cover}"
 
 rule cover_statistics:
     input:
-        expand("regions/gfas/pruned/r{region}.reducted.notips{{tip_max_size}}.nobubbles{{bubble_max_size}}.cover", region = regions)
+        expand("regions/gfas/pruned/r{region}.reducted.t{{tip_max_size}}.b{{bubble_max_size}}.d{{degree_max_size}}.cover", region = regions)
     output:
-        "regions/stats/cover.notips{tip_max_size}.nobubbles{bubble_max_size}.txt"
+        "regions/stats/cover.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.txt"
     run:
         max_covers = []
         for i in input:
@@ -216,23 +217,23 @@ rule cover_statistics:
 
 rule ul_align_to_graph:
     input:
-        graph = "regions/gfas/pruned/r{region}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.gfa",
+        graph = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.gfa",
         nano = "regions/fastas_nanopore/r{region}.fasta"
     output:
-        aln = "regions/jsons/r{region}.notips{tip_max_size}.nobubbles{bubble_max_size}.json"
-    log: "regions/logs/nanopore_alignment/r{region}.notips{tip_max_size}.nobubbles{bubble_max_size}.log"
-    threads: 10
+        aln = "regions/jsons/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.json"
+    log: "regions/logs/nanopore_alignment/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.log"
+    threads: 5
     shell:
-        "GraphAligner -g {input.graph} -f {input.nano} --try-all-seeds -t {threads} -a {output.aln} --seeds-mxm-length 10 -b 35 1>{log} 2>&1"
+        "GraphAligner -g {input.graph} -f {input.nano} -t {threads} --seeds-mum-count 30000 -a {output.aln} --seeds-mxm-length 10 -b 35 1>{log} 2>&1"
 
 rule extract_contigs_from_cover:
     input:
-        gfa = "regions/gfas/pruned/r{region}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.gfa",
-        json = "regions/jsons/r{region}.notips{tip_max_size}.nobubbles{bubble_max_size}.json",
-        lemon = "regions/gfas/pruned/r{region}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.lemon",
-        cover = "regions/gfas/pruned/r{region}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.cover"
+        gfa = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.gfa",
+        json = "regions/jsons/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.json",
+        lemon = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.lemon",
+        cover = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.cover"
     output:
-        "regions/contigs/r{region}.notips{tip_max_size}.nobubbles{bubble_max_size}.fa"
+        "regions/contigs/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.fa"
     shell:
         "python3 ../WHdenovo/paftest/contigs_from_nanopore_cover.py {input.gfa} {input.json} {input.lemon} {input.cover} > {output}"
 
@@ -251,9 +252,9 @@ rule plot_bandage_raw:
 
 rule plot_bandage_pruned:
     input:
-        graph = "regions/gfas/pruned/r{region}.reducted.notips{tip_max_size}.nobubbles{bubble_max_size}.gfa"
+        graph = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.gfa"
     output:
-        png = "regions/pngs/r{region}.pruned.notips{tip_max_size}.nobubbles{bubble_max_size}.png"
+        png = "regions/pngs/r{region}.pruned.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.png"
     shell:
         "LINES=$(wc -l < {input.graph}) ; if [ $LINES -gt 0 ]; then ../bin/Bandage image {input.graph} {output.png} --height 4000; else echo '' > {output.png}; fi"
 
@@ -263,9 +264,9 @@ rule plot_bandage_pruned:
 
 rule pool_contigs:
     input:
-        expand("regions/contigs/r{i}.notips{{tip_max_size}}.nobubbles{{bubble_max_size}}.fa", i=regions)
+        expand("regions/contigs/r{i}.t{{tip_max_size}}.b{{bubble_max_size}}.d{{degree_max_size}}.fa", i=regions)
     output:
-        "regions/contigs/pooled.notips{tip_max_size}.nobubbles{bubble_max_size}.fa"    
+        "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.fa"    
     shell:
         "cat {input} > {output}"
 
