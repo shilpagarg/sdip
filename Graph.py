@@ -1,4 +1,5 @@
 import sys
+import re
 
 def rev_comp(sequence):
     complement = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A'}
@@ -27,8 +28,16 @@ class Graph(object):
 
         self.edgeOvlp[(node1.name, node2.name)] = ovlp
         self.edgeOvlp[(node2.name, node1.name)] = ovlp
+        
+        #Reverse CIGAR string
+        ops = re.findall(r'[0-9]+[MDI]', cigar)
+        ops_parsed = [(int(op[:-1]), op[-1]) for op in ops]
+        reversed_operations = {"M": "M", "D": "I", "I": "D"}
+        ops_reversed = [(l, reversed_operations[op]) for l, op in ops_parsed[::-1]]
+        cigar_reversed = "".join(["%d%s" % (l, op) for l, op in ops_reversed])
+        
         self.edgeCigar[(node1.name, node2.name)] = cigar
-        self.edgeCigar[(node2.name, node1.name)] = cigar
+        self.edgeCigar[(node2.name, node1.name)] = cigar_reversed
 
     def removeLonelyNodes(self):
         lonely_nodes = []
@@ -37,7 +46,7 @@ class Graph(object):
                 lonely_nodes.append(name)
         for name in lonely_nodes:
             del self.nodemap[name]
-            #print("Removed lonely node", name, file=sys.stderr)
+            print("Removed lonely node", name, file=sys.stderr)
 
     def getStartOrEndNodes(self):
         startOrEnd = set()
@@ -205,7 +214,7 @@ class Graph(object):
         seqLength = rawLength - ovlpLength
         return seqLength
 
-    def getPathSeq(self, path):
+    def getPathSeqUsingOverlap(self, path):
         if len(path) < 1:
             return ""
         if path[0][1] == '+':
@@ -219,6 +228,29 @@ class Graph(object):
                 sequence += node_sequence[ovlpLength:]
             else:
                 sequence += rev_comp(node_sequence)[ovlpLength:]
+        return sequence
+    
+    def getPathSeqUsingCIGAR(self, path):
+        if len(path) < 1:
+            return ""
+        if path[0][1] == '+':
+            sequence = self.nodemap[path[0][0]].sequence
+        else:
+            sequence = rev_comp(self.nodemap[path[0][0]].sequence)
+        for i in range(1, len(path)):
+            node_sequence = self.nodemap[path[i][0]].sequence
+            cigar = self.edgeCigar[(path[i-1][0], path[i][0])]
+            ops = re.findall(r'[0-9]+[MDI]', cigar)
+            ops_parsed = [(int(op[:-1]), op[-1]) for op in ops]
+            num_matches = sum([l for l, op in ops_parsed if op == "M"])
+            num_dels = sum([l for l, op in ops_parsed if op == "D"])
+            num_ins = sum([l for l, op in ops_parsed if op == "I"])
+            len_overlap1 = num_matches + num_dels
+            len_overlap2 = num_matches + num_ins
+            if path[i][1] == '+':
+                sequence += node_sequence[len_overlap2:]
+            else:
+                sequence += rev_comp(node_sequence)[len_overlap2:]
         return sequence
 
 
