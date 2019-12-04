@@ -46,7 +46,7 @@ class Graph(object):
                 lonely_nodes.append(name)
         for name in lonely_nodes:
             del self.nodemap[name]
-            print("Removed lonely node", name, file=sys.stderr)
+            #print("Removed lonely node", name, file=sys.stderr)
 
     def getStartOrEndNodes(self):
         startOrEnd = set()
@@ -90,24 +90,24 @@ class Graph(object):
             last = tip
             stack = []
             if self.nodemap[last].Enodes == set():
-                stack.append([(last, '-')])
+                stack.append([(last, False)])
             else:
-                stack.append([(last, '+')])
+                stack.append([(last, True)])
             while len(stack) > 0:
                 path = stack.pop()
                 last_node, last_orientation = path[-1]
                 #print("At node " + last_node, file=sys.stderr)
-                if last_orientation == '+':
+                if last_orientation == True:
                     if len(self.nodemap[last_node].Enodes) > 0:
                         for nxt in self.nodemap[last_node].Enodes:
-                            if (nxt, '+') in path or (nxt, '-') in path:
+                            if (nxt, True) in path or (nxt, False) in path:
                                 #print("Have seen this node before: " + nxt, file=sys.stderr)
                                 continue
                             if last_node in self.nodemap[nxt].Bnodes:
-                                stack.append(path + [(nxt, '+')])
+                                stack.append(path + [(nxt, True)])
                                 #print("step forward", file=sys.stderr)
                             else:
-                                stack.append(path + [(nxt, '-')])
+                                stack.append(path + [(nxt, False)])
                                 #print("step forward", file=sys.stderr)
                     else:
                         #print("Reached tip " + str(len(paths)), file=sys.stderr)
@@ -119,14 +119,14 @@ class Graph(object):
                 else:
                     if len(self.nodemap[last_node].Bnodes) > 0:
                         for nxt in self.nodemap[last_node].Bnodes:
-                            if (nxt, '+') in path or (nxt, '-') in path:
+                            if (nxt, True) in path or (nxt, False) in path:
                                 #print("Have seen this node before: " + nxt, file=sys.stderr)
                                 continue
                             if last_node in self.nodemap[nxt].Enodes:
-                                stack.append(path + [(nxt, '-')])
+                                stack.append(path + [(nxt, False)])
                                 #print("step forward", file=sys.stderr)
                             else:
-                                stack.append(path + [(nxt, '+')])
+                                stack.append(path + [(nxt, True)])
                                 #print("step forward", file=sys.stderr)
                     else:
                         #print("Reached tip " + str(len(paths)), file=sys.stderr)
@@ -146,14 +146,14 @@ class Graph(object):
             last = tip
             stack = []
             if self.nodemap[last].Enodes == set():
-                stack.append([(last, '-')])
+                stack.append([(last, False)])
             else:
-                stack.append([(last, '+')])        
+                stack.append([(last, True)])
             while len(stack) > 0:
                 path = stack.pop()
                 last_node, last_orientation = path[-1]
                 #print("At node " + last_node, file=sys.stderr)
-                if last_orientation == '+':
+                if last_orientation == True:
                     if len(self.nodemap[last_node].Enodes) > 0:
                         if len(self.nodemap[last_node].Enodes) == 1:
                             nxt = list(self.nodemap[last_node].Enodes)[0]
@@ -163,14 +163,14 @@ class Graph(object):
                                         tips.append(path)
                                     break
                                 else:
-                                    stack.append(path + [(nxt, '+')])
+                                    stack.append(path + [(nxt, True)])
                             elif last_node in self.nodemap[nxt].Enodes:
                                 if len(self.nodemap[nxt].Enodes) > 1:
                                     if len(path) <= max_length:
                                         tips.append(path)
                                     break
                                 else:
-                                    stack.append(path + [(nxt, '-')])
+                                    stack.append(path + [(nxt, False)])
                         else:
                             break
                     else:
@@ -187,14 +187,14 @@ class Graph(object):
                                         tips.append(path)
                                     break
                                 else:
-                                    stack.append(path + [(nxt, '+')])
+                                    stack.append(path + [(nxt, True)])
                             elif last_node in self.nodemap[nxt].Enodes:
                                 if len(self.nodemap[nxt].Enodes) > 1:
                                     if len(path) <= max_length:
                                         tips.append(path)
                                     break
                                 else:
-                                    stack.append(path + [(nxt, '-')])
+                                    stack.append(path + [(nxt, False)])
                         else:
                             break
                     else:
@@ -217,14 +217,14 @@ class Graph(object):
     def getPathSeqUsingOverlap(self, path):
         if len(path) < 1:
             return ""
-        if path[0][1] == '+':
+        if path[0][1] == True:
             sequence = self.nodemap[path[0][0]].sequence
         else:
             sequence = rev_comp(self.nodemap[path[0][0]].sequence)
         for i in range(1, len(path)):
             node_sequence = self.nodemap[path[i][0]].sequence
             ovlpLength = self.edgeOvlp[(path[i-1][0], path[i][0])]
-            if path[i][1] == '+':
+            if path[i][1] == True:
                 sequence += node_sequence[ovlpLength:]
             else:
                 sequence += rev_comp(node_sequence)[ovlpLength:]
@@ -233,7 +233,7 @@ class Graph(object):
     def getPathSeqUsingCIGAR(self, path):
         if len(path) < 1:
             return ""
-        if path[0][1] == '+':
+        if path[0][1] == True:
             sequence = self.nodemap[path[0][0]].sequence
         else:
             sequence = rev_comp(self.nodemap[path[0][0]].sequence)
@@ -247,7 +247,7 @@ class Graph(object):
             num_ins = sum([l for l, op in ops_parsed if op == "I"])
             len_overlap1 = num_matches + num_dels
             len_overlap2 = num_matches + num_ins
-            if path[i][1] == '+':
+            if path[i][1] == True:
                 sequence += node_sequence[len_overlap2:]
             else:
                 sequence += rev_comp(node_sequence)[len_overlap2:]

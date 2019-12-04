@@ -1,4 +1,6 @@
 import sys
+import networkx as nx
+import argparse
 
 def readGFA(gfaFile):
     gfa = open(gfaFile).read().split('\n')[:-1]
@@ -39,16 +41,35 @@ def readGFA(gfaFile):
         nodes_directed.add(node2)
     return nodes_directed, edges
 
-nodes, edges = readGFA(sys.argv[1])
-print('@nodes')
-print('label')
-for i in nodes:
-    print(i)
 
-print('@arcs')
-print('\t\tlabel\tweight')
-count=1
-for node1, node2 in edges:
-    print(node1, node2, str(count), str(1))
-    #print(edges[i].split(':')[0].split("/")[1], edges[i].split(':')[1].split("/")[1], str(count+1), str(1))
-    count+=1
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('gfa', type = str, help = 'graph in gfa format')
+    args = parser.parse_args()
+    
+    nodes, edges = readGFA(args.gfa)
+    G = nx.Graph()
+    for node1, node2 in edges:
+        G.add_edge(node1, node2)
+    if nx.number_connected_components(G) != 2:
+        print("Error: Number of connected compontents is %d and not 2." % (nx.number_connected_components(G)), file=sys.stderr)
+        return False
+
+    nodes_in_first_component = list(nx.connected_components(G))[0]
+    edges_in_first_component = [(n1, n2) for (n1, n2) in edges if (n1 in nodes_in_first_component and n2 in nodes_in_first_component)]
+
+    print('@nodes')
+    print('label')
+    for i in nodes_in_first_component:
+        print(i)
+
+    print('@arcs')
+    print('\t\tlabel\tweight')
+    count=1
+    for node1, node2 in edges_in_first_component:
+        print(node1, node2, str(count), str(1))
+        #print(edges[i].split(':')[0].split("/")[1], edges[i].split(':')[1].split("/")[1], str(count+1), str(1))
+        count+=1
+
+if __name__ == '__main__':
+    main()

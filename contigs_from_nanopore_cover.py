@@ -56,18 +56,18 @@ def remove_uncovered_edges(G, cover_dict):
 	for edge, cover in cover_dict.items():
 		if cover == 0:
 			(name1, dir1), (name2, dir2) = edge
-			if dir1 == '+':
+			if dir1 == True:
 				G.nodemap[name1].Enodes.discard(name2)
-			elif dir1 == '-':
+			else:
 				G.nodemap[name1].Bnodes.discard(name2)
-			if dir2 == '+':
+			if dir2 == True:
 				G.nodemap[name2].Bnodes.discard(name1)
-			elif dir2 == '-':
+			else:
 				G.nodemap[name2].Enodes.discard(name1)
 			del G.edgeOvlp[(name1, name2)]
 			del G.edgeCigar[(name1, name2)]
 			removed_edges.append(edge)
-			print("Remove edge between", name1, dir1, "and", name2, dir2, file=sys.stderr)
+			#print("Remove edge %s%s,%s%s" % (name1, dir1, name2, dir2), file=sys.stderr)
 	for edge in removed_edges:
 		del cover_dict[edge]
 
@@ -76,28 +76,29 @@ def getPathsFromPathCover(G, cover_dict):
 	paths = []
 	while len(G.nodemap) > 0:
 		startOrEndNodes = list(G.getStartOrEndNodes())
-		print("Current start/end nodes:", startOrEndNodes, file=sys.stderr)
+		#print("Current start/end nodes:", startOrEndNodes, file=sys.stderr)
 		if len(startOrEndNodes) < 1:
 			print("Error: No start or end nodes", file=sys.stderr)
 			break
+		#print("Start at node", startOrEndNodes[0], file=sys.stderr)
 		first_node = startOrEndNodes[0]
 		if G.nodemap[first_node].Enodes == set() and G.nodemap[first_node].Bnodes != set():
-			current_path = [(first_node, '-')]
+			current_path = [(first_node, False)]
 		elif G.nodemap[first_node].Bnodes == set() and G.nodemap[first_node].Enodes != set():
-			current_path = [(first_node, '+')]
+			current_path = [(first_node, True)]
 		else:
 			print("Error: Found lonely node", file=sys.stderr)
 			break
 		while True:
 			last_node, last_dir = current_path[-1]
-			if last_dir == '+':
+			if last_dir == True:
 				#print("Forward: ", G.nodemap[last_node].Enodes)
 				possible_nxt_nodes = []
 				for nxt_node in G.nodemap[last_node].Enodes:
 					if last_node in G.nodemap[nxt_node].Bnodes:
-						nxt_dir = '+'
+						nxt_dir = True
 					elif last_node in G.nodemap[nxt_node].Enodes:
-						nxt_dir = '-'
+						nxt_dir = False
 					else:
 						continue
 					if cover_dict[((last_node, last_dir), (nxt_node, nxt_dir))] > 0:
@@ -105,6 +106,7 @@ def getPathsFromPathCover(G, cover_dict):
 				if len(possible_nxt_nodes) > 0:
 					nxt_node, nxt_dir = possible_nxt_nodes[0]
 					cover_dict[((last_node, last_dir), (nxt_node, nxt_dir))] -= 1
+					cover_dict[((nxt_node, not nxt_dir), (last_node, not last_dir))] -= 1
 					current_path.append((nxt_node, nxt_dir))
 				else:
 					#print("Reached end: ", ",".join([node + ("+" if direction else "-") for node, direction in current_path]), file=sys.stderr)
@@ -115,9 +117,9 @@ def getPathsFromPathCover(G, cover_dict):
 				possible_nxt_nodes = []
 				for nxt_node in G.nodemap[last_node].Bnodes:
 					if last_node in G.nodemap[nxt_node].Bnodes:
-						nxt_dir = '+'
+						nxt_dir = True
 					elif last_node in G.nodemap[nxt_node].Enodes:
-						nxt_dir = '-'
+						nxt_dir = False
 					else:
 						continue
 					if cover_dict[((last_node, last_dir), (nxt_node, nxt_dir))] > 0:
@@ -125,6 +127,7 @@ def getPathsFromPathCover(G, cover_dict):
 				if len(possible_nxt_nodes) > 0:
 					nxt_node, nxt_dir = possible_nxt_nodes[0]
 					cover_dict[((last_node, last_dir), (nxt_node, nxt_dir))] -= 1
+					cover_dict[((nxt_node, not nxt_dir), (last_node, not last_dir))] -= 1
 					current_path.append((nxt_node, nxt_dir))
 				else:
 					#print("Reached end: ", ",".join([node + ("+" if direction else "-") for node, direction in current_path]), file=sys.stderr)
@@ -179,21 +182,22 @@ def main():
 		id1_full, id2_full = arcs[arc]
 		id1 = id1_full[:-1]
 		if id1_full[-1] == "1":
-			dir1 = '+'
+			dir1 = True
 		elif id1_full[-1] == "0":
-			dir1 = '-'
+			dir1 = False
 		else:
 			sys.stderr.write('Error reading direction.\n')
 		id2 = id2_full[:-1]
 		if id2_full[-1] == "1":
-			dir2 = '+'
+			dir2 = True
 		elif id2_full[-1] == "0":
-			dir2 = '-'
+			dir2 = False
 		else:
 			sys.stderr.write('Error reading direction.\n')
 		name1 = lookup_nodename(id1, G.nodemap)
 		name2 = lookup_nodename(id2, G.nodemap)
 		cover_dict[((name1, dir1), (name2, dir2))] = cover
+		cover_dict[((name2, not dir2), (name1, not dir1))] = cover
 	sys.stderr.write('Cover read.\n')
 
 	print("Start computing all paths..", file=sys.stderr)
@@ -229,12 +233,23 @@ def main():
 					tip1 = min(tips[tip_i], tips[tip_j])
 					tip2 = max(tips[tip_i], tips[tip_j])
 					print('Found %d paths between %s and %s. Choosing one randomly.' % (len(paths_between_tips[(tip1,tip2)]), tip1, tip2), file=sys.stderr)
-					chosen_path = paths_between_tips[(tip1,tip2)][0]
-					for path_i in range(len(chosen_path) - 1):
-						from_node, from_dir = chosen_path[path_i]
-						to_node, to_dir = chosen_path[path_i+1]
-						assert cover_dict[((from_node, from_dir), (to_node, to_dir))] >= 1
-						cover_dict[((from_node, from_dir), (to_node, to_dir))] -= 1
+					bad_path = True
+					i = 0
+					while bad_path and i < len(paths_between_tips[(tip1,tip2)]):
+						bad_path = False
+						cover_dict_copy = deepcopy(cover_dict)
+						chosen_path = paths_between_tips[(tip1,tip2)][i]
+						for path_i in range(len(chosen_path) - 1):
+							from_node, from_dir = chosen_path[path_i]
+							to_node, to_dir = chosen_path[path_i+1]
+							if cover_dict_copy[((from_node, from_dir), (to_node, to_dir))] < 1:
+								bad_path = True
+								i += 1
+								break
+							cover_dict_copy[((from_node, from_dir), (to_node, to_dir))] -= 1
+							cover_dict_copy[((to_node, not to_dir), (from_node, not from_dir))] -= 1
+					assert not bad_path, "Error: No good path with sufficient path cover was found for nanopore alignment."
+					cover_dict = cover_dict_copy
 					hap_count += 1
 					path_seq = G_copy.getPathSeqUsingCIGAR(chosen_path)
 					print('>hap%d len=%d' % (hap_count, len(path_seq)))
