@@ -42,6 +42,18 @@ def readGFA(gfaFile):
     return nodes_directed, edges
 
 
+def checkComponents(components):
+    """Check whether any component has both directions of the same read."""
+    for component in components:
+        seen = set()
+        for node in component:
+            node_without_dir = node[:-1]
+            if node_without_dir in seen:
+                print("Error: This graph seems to contain cycles. See node %s." % (node_without_dir), file=sys.stderr)
+                return False
+            seen.add(node_without_dir)
+    return True
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('gfa', type = str, help = 'graph in gfa format')
@@ -51,22 +63,32 @@ def main():
     G = nx.Graph()
     for node1, node2 in edges:
         G.add_edge(node1, node2)
-    if nx.number_connected_components(G) != 2:
-        print("Error: Number of connected compontents is %d and not 2." % (nx.number_connected_components(G)), file=sys.stderr)
+    components = list(nx.connected_components(G))
+    if not checkComponents(components):
         return False
 
-    nodes_in_first_component = list(nx.connected_components(G))[0]
-    edges_in_first_component = [(n1, n2) for (n1, n2) in edges if (n1 in nodes_in_first_component and n2 in nodes_in_first_component)]
+    chosen_nodes = []
+    for component in components:
+        new_component = True
+        for node in component:
+            node_without_dir = node[:-1]
+            if (node_without_dir + "1") in chosen_nodes or (node_without_dir + "0") in chosen_nodes:
+                new_component = False
+                break
+        if new_component:
+            chosen_nodes.extend(component)
+
+    chosen_edges = [(n1, n2) for (n1, n2) in edges if (n1 in chosen_nodes and n2 in chosen_nodes)]
 
     print('@nodes')
     print('label')
-    for i in nodes_in_first_component:
+    for i in chosen_nodes:
         print(i)
 
     print('@arcs')
     print('\t\tlabel\tweight')
     count=1
-    for node1, node2 in edges_in_first_component:
+    for node1, node2 in chosen_edges:
         print(node1, node2, str(count), str(1))
         #print(edges[i].split(':')[0].split("/")[1], edges[i].split(':')[1].split("/")[1], str(count+1), str(1))
         count+=1
