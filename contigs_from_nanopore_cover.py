@@ -1,6 +1,6 @@
 import sys
 import argparse
-from collections import defaultdict
+from collections import defaultdict, Counter
 import json
 import networkx as nx
 from Graph import Graph, Node
@@ -45,10 +45,10 @@ def readGFA(gfaFile):
 	return G, nxg
 
 def lookup_nodename(lemon_id, nodemap):
-	zmw_hole = lemon_id[:4]
-	run_time = lemon_id[4:8]
-	matching_nodes = [key for key in nodemap.keys() if (key.split("/")[1][-4:] == zmw_hole) and (key.split("/")[0][-4:] == run_time)]
-	assert len(matching_nodes) == 1, "Number of matching nodes is not 1 for lemon_id %s." % (lemon_id)
+	zmw_hole = lemon_id[:6]
+	run_time = lemon_id[6:8]
+	matching_nodes = [key for key in nodemap.keys() if (key.split("/")[1][-6:] == zmw_hole) and (key.split("/")[0][-2:] == run_time)]
+	assert len(matching_nodes) == 1, "Number of matching nodes is %d and not 1 for lemon_id %s." % (len(matching_nodes), lemon_id)
 	return matching_nodes[0]
 
 def remove_uncovered_edges(G, cover_dict):
@@ -144,6 +144,7 @@ def main():
 	parser.add_argument('lemon', type = str, help = 'graph in lemon format')
 	parser.add_argument('cover', type = str, help = 'mc-mpc solver output')
 	parser.add_argument('--print_paths', action = "store_true", help = 'print paths (i.e. list of node names) on stderr')
+	parser.add_argument('--prefix', type = str, default = "", help = 'contig name prefix (default: no prefix)')
 	args = parser.parse_args()
 
 	sys.stderr.write('Reading gfa graph...\n')
@@ -174,7 +175,7 @@ def main():
 
 	sys.stderr.write('Reading cover...\n')
 	cover_file = open(args.cover, 'r')
-	cover_dict = {}
+	cover_dict = Counter()
 	for line in cover_file:
 		fields = line.strip().split()
 		arc = fields[0]
@@ -248,11 +249,16 @@ def main():
 								break
 							cover_dict_copy[((from_node, from_dir), (to_node, to_dir))] -= 1
 							cover_dict_copy[((to_node, not to_dir), (from_node, not from_dir))] -= 1
-					assert not bad_path, "Error: No good path with sufficient path cover was found for nanopore alignment."
+					if bad_path:
+						cover_dict_copy = deepcopy(cover_dict)
+						break
 					cover_dict = cover_dict_copy
 					hap_count += 1
 					path_seq = G_copy.getPathSeqUsingCIGAR(chosen_path)
-					print('>hap%d len=%d' % (hap_count, len(path_seq)))
+					if args.prefix == "":
+						print('>hap%d len=%d' % (hap_count, len(path_seq)))
+					else:
+						print('>%s_hap%d len=%d' % (args.prefix, hap_count, len(path_seq)))
 					print(path_seq)
 					if args.print_paths:
 						print("Path %d: " % (hap_count) + ",".join([node for node, direction in chosen_path]), file=sys.stderr)
@@ -268,7 +274,10 @@ def main():
 	for path in paths:
 		hap_count += 1
 		path_seq = G_copy.getPathSeqUsingCIGAR(path)
-		print('>hap%d len=%d' % (hap_count, len(path_seq)))
+		if args.prefix == "":
+			print('>hap%d len=%d' % (hap_count, len(path_seq)))
+		else:
+			print('>%s_hap%d len=%d' % (args.prefix, hap_count, len(path_seq)))
 		print(path_seq)
 		if args.print_paths:
 			print("Path %d: " % (hap_count) + ",".join([node for node, direction in path]), file=sys.stderr)

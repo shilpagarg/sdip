@@ -13,7 +13,7 @@ def readGFA(gfaFile):
             parts = name.split("/")
             run_time = parts[0]
             zmw_hole_nr = parts[1]
-            lemon_id = zmw_hole_nr[-4:] + run_time[-4:]
+            lemon_id = zmw_hole_nr[-6:] + run_time[-2:]
             nodes.add(lemon_id)
         elif line[0] == 'L':
             fields = line.split('\t')
@@ -22,14 +22,14 @@ def readGFA(gfaFile):
             run_time1 = node1_parts[0]
             zmw_hole_nr1 = node1_parts[1]
             node1dir = fields[2]
-            id1_full = zmw_hole_nr1[-4:] + run_time1[-4:] + ("1" if node1dir == "+" else "0")
+            id1_full = zmw_hole_nr1[-6:] + run_time1[-2:] + ("1" if node1dir == "+" else "0")
 
             node2 = fields[3]
             node2_parts = node2.split("/")
             run_time2 = node2_parts[0]
             zmw_hole_nr2 = node2_parts[1]
             node2dir = fields[4]
-            id2_full = zmw_hole_nr2[-4:] + run_time2[-4:] + ("1" if node2dir == "+" else "0")
+            id2_full = zmw_hole_nr2[-6:] + run_time2[-2:] + ("1" if node2dir == "+" else "0")
 
             ovlp = int(fields[5][:-1])
             edges.append((id1_full, id2_full))

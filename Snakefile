@@ -1,7 +1,8 @@
 configfile: "../WHdenovo/paftest/config.yaml"
 # ftp://ftp-trace.ncbi.nlm.nih.gov/giab/ftp/data/AshkenazimTrio/HG002_NA24385_son/UCSC_Ultralong_OxfordNanopore_Promethion/
 big_regions = [17, 32, 96, 101, 102, 108, 162, 166, 216, 217, 218, 267, 268, 275, 278, 285, 296, 306, 307, 433, 467, 470, 471, 503, 504]
-good_regions = [elem for elem in list(range(1, 505)) if not elem in big_regions]
+cycle_regions = [136, 187, 188, 189, 21, 227, 266, 269, 276, 333, 334, 34, 347, 361, 388, 423, 435, 440, 476, 488, 491, 500]
+good_regions = [elem for elem in list(range(1, 505)) if (not elem in big_regions) and (not elem in cycle_regions)]
 regions = good_regions
 
 
@@ -15,7 +16,8 @@ rule all:
         expand("regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.fa", tip_max_size=[5],
                                                                                                   bubble_max_size=[5],
                                                                                                   degree_max_size=[2]),
-        "regions/stats/cover.notips5.nobubbles5.txt"
+        "regions/contigs/pooled.sorted.bam.bai",
+        "regions/stats/cover.t5.b5.d2.txt"
 
 def get_samples(wildcards):
     return config["samples"][wildcards.sample]
@@ -234,8 +236,10 @@ rule extract_contigs_from_cover:
         cover = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.cover"
     output:
         "regions/contigs/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.fa"
+    params:
+        prefix = "r{region}"
     shell:
-        "python3 ../WHdenovo/paftest/contigs_from_nanopore_cover.py {input.gfa} {input.json} {input.lemon} {input.cover} > {output}"
+        "python3 ../WHdenovo/paftest/contigs_from_nanopore_cover.py --prefix {params.prefix} {input.gfa} {input.json} {input.lemon} {input.cover} > {output}"
 
 
 #############
@@ -273,11 +277,12 @@ rule pool_contigs:
 rule map_contigs:
     input:
         fa = "regions/contigs/pooled.fa",
-        ref = "/project/heller_d-data/genomes/hg38/hg38.mmi"
+        ref = config["genome"]
     output:
         "regions/contigs/pooled.sorted.bam"
+    threads: 10
     shell:
-        "minimap2 -a -k 19 -O 5,56 -E 4,1 -B 5 -z 400,50 -r 2k -t 10 --eqx --secondary=yes -N 100 -p 0.9 \
+        "minimap2 -ax asm5 -t {threads} --eqx \
         {input.ref} {input.fa} | samtools view -b | samtools sort > {output}"
 
 rule index_bam:
