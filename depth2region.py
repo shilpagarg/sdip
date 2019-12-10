@@ -37,6 +37,7 @@ def main():
     lastEnd = -1
     inregion = False
     newChr = False
+    currentChr = ''
     for i in readDepth(args.depth):
         
         currentChr = i[0]
@@ -71,9 +72,9 @@ def main():
         lastChr = currentChr
 
     if lastEnd < regionStart:
-        outputRegion((currentChr, regionStart, currentPos), args.format, args.min_length)
+        outputRegion((lastChr, regionStart, currentPos), args.format, args.min_length)
     else:
-        outputRegion((currentChr, regionStart, lastEnd), args.format, args.min_length)
+        outputRegion((lastChr, regionStart, lastEnd), args.format, args.min_length)
 
 if __name__ == '__main__':
     main()
