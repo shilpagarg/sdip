@@ -1,80 +1,117 @@
 import argparse
+from math import sqrt
+import sys
 
-def readDepth(depth):
-    with open(depth, 'r') as DF:
-        for line in DF.readlines():
-            line = line.rstrip()
-            tokens = line.split('\t')
-            chrm = tokens[0]
-            pos = int(tokens[1])
-            dpth = int(tokens[2])
-            yield (chrm, pos, dpth)
+def readBins(bin_file):
+    with open(bin_file, 'r') as b:
+        for line in b:
+            fields = line.rstrip().split()
+            chrom = fields[0]
+            start = int(fields[1])
+            end = int(fields[2])
+            depth = float(fields[3])
+            yield (chrom, start, end, depth)
 
-def outputRegion(region, form, minl):
-    if region[1] == -1 or region[2] == -1:
-        return False
-    if region[2] - region[1] < minl:
-        return False
+def compute_depth_mean(bin_file):
+    total_bases = 0
+    total_depth = 0
+    for chrom, start, end, depth in readBins(bin_file):
+        total_bases += end - start
+        total_depth += (end - start) * depth
+    return total_depth, total_bases
 
-    if form == 'BED':
+def compute_depth_sd(bin_file, mean):
+    total_bases = 0
+    total_squared_deviation = 0
+    for chrom, start, end, depth in readBins(bin_file):
+        total_bases += end - start
+        total_squared_deviation += (depth - mean) * (depth - mean) * (end - start)
+    sd = sqrt(total_squared_deviation / (total_bases - 1))
+    return sd
+
+def outputRegion(region, form = 'bed'):
+    if form == 'bed':
         print(region[0]+'\t'+str(region[1])+'\t'+str(region[2]))
     elif form == 'region':
         print(region[0]+':'+str(region[1])+'-'+str(region[2]))
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-d', '--depth', type = str, metavar = 'FILE', help = 'Output file from "samtools depth".', required = True)
-    parser.add_argument('-m', '--mincov', type = int, metavar = 'INT', default = 20, help = 'Minimum depth [20] to consider as high-coverage.')
-    parser.add_argument('-min-length', type = int, metavar = 'INT', default = 10000, help = 'Minimum region length [10000] to consider')
-    parser.add_argument('-w', '--window', type = int, default = 5, help = 'While going through each position, allow [5] bp that has coverage lower than threshold. (i.e. A short drop in coverage')
-    parser.add_argument('-f', '--format', type = str, metavar = '[BED|region]', default = 'BED', help = 'Output format. BED refers to "chr\\tfrom\\tto" for each line; region refers to "chr:from-to" for each line')
+    parser.add_argument('bins', type = str, metavar = 'FILE', help = 'Output file from "bin_depths.py".')
+    parser.add_argument('-l', '--min_length', type = int, metavar = 'INT', default = 10000, help = 'Minimum region length [10000] to consider')
+    parser.add_argument('-t', '--tolerance', type = int, default = 2, help = 'While going through each bin, allow [5] bins that have coverage lower than threshold. (i.e. A short drop in coverage')
+    parser.add_argument('-f', '--format', type = str, metavar = '[BED|region]', default = 'bed', help = 'Output format. bed refers to "chr\\tfrom\\tto" for each line; region refers to "chr:from-to" for each line')
     args = parser.parse_args()
     
-    lastChr = ''
-    lastPos = -1
-    regionStart = -1
-    regionEnd = -1
-    lastEnd = -1
-    inregion = False
-    newChr = False
-    currentChr = ''
-    for i in readDepth(args.depth):
-        
-        currentChr = i[0]
-        currentPos = i[1]
-
-        if currentChr != lastChr:
-            newChr = True
-            if lastChr != '' and inregion:
-                outputRegion((lastChr, regionStart, lastPos), args.format, args.min_length)
-        else:
-            newChr = False
-            
-        if i[2] >= args.mincov:
-
-            if not inregion:
-                inregion = True
-                if newChr:
-                    regionStart = i[1]
-                elif currentPos - lastEnd >= args.window:
-                    outputRegion((currentChr, regionStart, lastEnd), args.format, args.min_length)
-                    regionStart = i[1]
+    total_depth, total_bases = compute_depth_mean(args.bins)
+    mean_depth = total_depth / total_bases
+    print("Mean:", mean_depth, file=sys.stderr)
+    
+    sd = compute_depth_sd(args.bins, mean_depth)
+    print("SD:", sd, file=sys.stderr)
+    
+    min_cov = mean_depth + 3*sd
+    print("Min coverage:", min_cov, file=sys.stderr)
+    
+    in_region = False
+    region_chrom = ''
+    region_start = -1
+    region_end = -1
+    regions = []
+    
+    for chrom, start, end, depth in readBins(args.bins):
+        if depth >= min_cov:
+            if in_region:
+                if chrom == region_chrom:
+                    region_end = end
+                else:
+                    regions.append((region_chrom, region_start, region_end))
+                    region_chrom = chrom
+                    region_start = start
+                    region_end = end
             else:
-                if currentPos - lastPos >= args.window:
-                    outputRegion((currentChr, regionStart, lastPos), args.format, args.min_length)
-                    regionStart = i[1]
+                in_region = True
+                region_chrom = chrom
+                region_start = start
+                region_end = end
         else:
-            if inregion:
-                lastEnd = lastPos
-            inregion = False
-
-        lastPos = currentPos
-        lastChr = currentChr
-
-    if lastEnd < regionStart:
-        outputRegion((lastChr, regionStart, currentPos), args.format, args.min_length)
-    else:
-        outputRegion((lastChr, regionStart, lastEnd), args.format, args.min_length)
+            if in_region:
+                if chrom == region_chrom:
+                    if (end - region_end) > args.tolerance:
+                        regions.append((region_chrom, region_start, region_end))
+                        in_region = False
+                        region_chrom = ''
+                        region_start = -1
+                        region_end = -1
+                else:
+                    regions.append((region_chrom, region_start, region_end))
+                    in_region = False
+                    region_chrom = ''
+                    region_start = -1
+                    region_end = -1
+    if in_region:
+        regions.append((region_chrom, region_start, region_end))
+    
+    print("Found %d regions (%d larger than threshold)" % (len(regions), len([r for r in regions if (r[2] - r[1]) >= args.min_length])), file=sys.stderr)
+    region_chrom = ''
+    region_start = -1
+    region_end = -1
+    for chrom, start, end in regions:
+        if (end - start) >= args.min_length:
+            if region_chrom == '':
+                region_chrom = chrom
+                region_start = max(0, start - 15000)
+                region_end = end + 15000
+            else:
+                if region_chrom == chrom and ((start - 15000) - region_end) < 10000:
+                    region_end = end + 15000
+                else:
+                    outputRegion((region_chrom, region_start, region_end), form = args.format)
+                    region_chrom = chrom
+                    region_start = max(0, start - 15000)
+                    region_end = end + 15000
+    if region_chrom != '':
+        outputRegion((region_chrom, region_start, region_end), form = args.format)
 
 if __name__ == '__main__':
     main()
