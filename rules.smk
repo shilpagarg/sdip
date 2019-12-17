@@ -134,7 +134,7 @@ rule filter_paf_for_long_indels:
     output:
         paf = "regions/pafs/r{region}.fasta.filtered.paf"
     shell:
-        "python3 /project/pacbiosv/code/WHdenovo/paftest/filter_indels_in_paf.py {input.paf} --max_indel 50 > {output.paf}"
+        "python3 %s/filter_indels_in_paf.py {input.paf} --max_indel 50 > {output.paf}" % (config["tools"]["paftest"])
 
 rule generate_graph_use_paf:
     input:
