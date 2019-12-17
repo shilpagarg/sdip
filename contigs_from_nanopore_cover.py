@@ -140,9 +140,9 @@ def getPathsFromPathCover(G, cover_dict):
 def main():
 	parser = argparse.ArgumentParser()
 	parser.add_argument('gfa', type = str, help = 'graph in gfa format')
-	parser.add_argument('json', type = str, help = 'nanopore alignments in json format')
 	parser.add_argument('lemon', type = str, help = 'graph in lemon format')
 	parser.add_argument('cover', type = str, help = 'mc-mpc solver output')
+	parser.add_argument('--json', type = str, default = "", help = 'nanopore alignments in json format (optional)')
 	parser.add_argument('--print_paths', action = "store_true", help = 'print paths (i.e. list of node names) on stderr')
 	parser.add_argument('--prefix', type = str, default = "", help = 'contig name prefix (default: no prefix)')
 	args = parser.parse_args()
@@ -153,8 +153,9 @@ def main():
 	G.removeLonelyNodes()
 	sys.stderr.write('Read gfa graph.\n')
 
-	json_file = open(args.json, 'r')
-	longreads = json_file.readlines()
+	if args.json != "":
+		json_file = open(args.json, 'r')
+		longreads = json_file.readlines()
 
 	sys.stderr.write('Reading lemon graph...\n')
 	lemon_content = open(args.lemon, 'r').read().split('\n')[:-1]
@@ -218,54 +219,55 @@ def main():
 		if last_node not in tips:
 			tips += [last_node]
 	
-	print("Start extracting paths from nanopore alignments..", file=sys.stderr)
 	hap_count = 0
 	remove_uncovered_edges(G, cover_dict)
 	G.removeLonelyNodes()
-	cover_dict_copy = deepcopy(cover_dict)
-	for tip_i in range(len(tips)):
-		for tip_j in range(tip_i+1,len(tips)):
-			edges1 = list(nx.bfs_edges(nxg, tips[tip_i], depth_limit=2))
-			edges2 = list(nx.bfs_edges(nxg, tips[tip_j], depth_limit=2))
-			_, threeawaytip1 = edges1[1]
-			_, threeawaytip2 = edges2[1]
-			for line in longreads:
-				if threeawaytip1 in line and threeawaytip2 in line:
-					tip1 = min(tips[tip_i], tips[tip_j])
-					tip2 = max(tips[tip_i], tips[tip_j])
-					print('Found %d paths between %s and %s. Choosing one randomly.' % (len(paths_between_tips[(tip1,tip2)]), tip1, tip2), file=sys.stderr)
-					bad_path = True
-					i = 0
-					while bad_path and i < len(paths_between_tips[(tip1,tip2)]):
-						bad_path = False
-						cover_dict_copy = deepcopy(cover_dict)
-						chosen_path = paths_between_tips[(tip1,tip2)][i]
-						for path_i in range(len(chosen_path) - 1):
-							from_node, from_dir = chosen_path[path_i]
-							to_node, to_dir = chosen_path[path_i+1]
-							if cover_dict_copy[((from_node, from_dir), (to_node, to_dir))] < 1:
-								bad_path = True
-								i += 1
-								break
-							cover_dict_copy[((from_node, from_dir), (to_node, to_dir))] -= 1
-							cover_dict_copy[((to_node, not to_dir), (from_node, not from_dir))] -= 1
-					if bad_path:
-						cover_dict_copy = deepcopy(cover_dict)
+	if args.json != "":
+		print("Start extracting paths from nanopore alignments..", file=sys.stderr)
+		cover_dict_copy = deepcopy(cover_dict)
+		for tip_i in range(len(tips)):
+			for tip_j in range(tip_i+1,len(tips)):
+				edges1 = list(nx.bfs_edges(nxg, tips[tip_i], depth_limit=2))
+				edges2 = list(nx.bfs_edges(nxg, tips[tip_j], depth_limit=2))
+				_, threeawaytip1 = edges1[1]
+				_, threeawaytip2 = edges2[1]
+				for line in longreads:
+					if threeawaytip1 in line and threeawaytip2 in line:
+						tip1 = min(tips[tip_i], tips[tip_j])
+						tip2 = max(tips[tip_i], tips[tip_j])
+						print('Found %d paths between %s and %s. Choosing one randomly.' % (len(paths_between_tips[(tip1,tip2)]), tip1, tip2), file=sys.stderr)
+						bad_path = True
+						i = 0
+						while bad_path and i < len(paths_between_tips[(tip1,tip2)]):
+							bad_path = False
+							cover_dict_copy = deepcopy(cover_dict)
+							chosen_path = paths_between_tips[(tip1,tip2)][i]
+							for path_i in range(len(chosen_path) - 1):
+								from_node, from_dir = chosen_path[path_i]
+								to_node, to_dir = chosen_path[path_i+1]
+								if cover_dict_copy[((from_node, from_dir), (to_node, to_dir))] < 1:
+									bad_path = True
+									i += 1
+									break
+								cover_dict_copy[((from_node, from_dir), (to_node, to_dir))] -= 1
+								cover_dict_copy[((to_node, not to_dir), (from_node, not from_dir))] -= 1
+						if bad_path:
+							cover_dict_copy = deepcopy(cover_dict)
+							break
+						cover_dict = cover_dict_copy
+						hap_count += 1
+						path_seq = G_copy.getPathSeqUsingCIGAR(chosen_path)
+						if args.prefix == "":
+							print('>hap%d len=%d' % (hap_count, len(path_seq)))
+						else:
+							print('>%s_hap%d len=%d' % (args.prefix, hap_count, len(path_seq)))
+						print(path_seq)
+						if args.print_paths:
+							print("Path %d: " % (hap_count) + ",".join([node for node, direction in chosen_path]), file=sys.stderr)
 						break
-					cover_dict = cover_dict_copy
-					hap_count += 1
-					path_seq = G_copy.getPathSeqUsingCIGAR(chosen_path)
-					if args.prefix == "":
-						print('>hap%d len=%d' % (hap_count, len(path_seq)))
-					else:
-						print('>%s_hap%d len=%d' % (args.prefix, hap_count, len(path_seq)))
-					print(path_seq)
-					if args.print_paths:
-						print("Path %d: " % (hap_count) + ",".join([node for node, direction in chosen_path]), file=sys.stderr)
-					break
-	remove_uncovered_edges(G, cover_dict)
-	G.removeLonelyNodes()
-	print("Done extracting paths from nanopore alignments.", file=sys.stderr)
+		remove_uncovered_edges(G, cover_dict)
+		G.removeLonelyNodes()
+		print("Done extracting paths from nanopore alignments.", file=sys.stderr)
 
 	print("Start extracting paths from path cover..", file=sys.stderr)
 	paths = getPathsFromPathCover(G, cover_dict)
