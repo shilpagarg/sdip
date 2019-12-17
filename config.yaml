@@ -7,3 +7,9 @@ regions:
 reads:
     pacbio: /lustre/scratch115/realdata/mdt3/projects/graphs/yeast/erik/final_exp/segdup/david/reads.pacbio.fastq
     nanopore: /lustre/scratch115/realdata/mdt3/projects/graphs/yeast/erik/final_exp/segdup/david/reads.nanopore.fastq
+
+#Paths to tools (minimap2, samtools and bedtools are assumed to be in PATH)
+tools:
+    paftest: /lustre/scratch115/realdata/mdt3/projects/graphs/yeast/erik/final_exp/segdup/david/WHdenovo/paftest
+    bandage: /lustre/scratch115/realdata/mdt3/projects/graphs/yeast/erik/final_exp/segdup/david/bin/Bandage
+    mc-mpc: /lustre/scratch115/realdata/mdt3/projects/graphs/yeast/erik/final_exp/segdup/david/bin/mc-mpc
