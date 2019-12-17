@@ -45,8 +45,8 @@ def readGFA(gfaFile):
 	return G, nxg
 
 def lookup_nodename(lemon_id, nodemap):
-	zmw_hole = lemon_id[:6]
-	run_time = lemon_id[6:8]
+	zmw_hole = lemon_id[:-2]
+	run_time = lemon_id[-2:]
 	matching_nodes = [key for key in nodemap.keys() if (key.split("/")[1][-6:] == zmw_hole) and (key.split("/")[0][-2:] == run_time)]
 	assert len(matching_nodes) == 1, "Number of matching nodes is %d and not 1 for lemon_id %s." % (len(matching_nodes), lemon_id)
 	return matching_nodes[0]
