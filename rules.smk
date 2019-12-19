@@ -10,9 +10,18 @@ wildcard_constraints:
 #Find similar segdup regions#
 #############################
 
-rule fetch_segdup_sequences:
+rule slop_15k:
     input:
         regions = config["regions"],
+        genome = config["genome"] + ".fai"
+    output:
+        regions = "regions/segdups/regions.slop15k.bed"
+    shell:
+        "bedtools slop -i {input.regions} -g {input.genome} -b 15000 > {output.regions}"
+
+rule fetch_segdup_sequences:
+    input:
+        regions = "regions/segdups/regions.slop15k.bed",
         reference = config["genome"]
     output:
         "regions/segdups/r{region}.fa"
@@ -223,7 +232,7 @@ rule ul_align_to_graph:
 rule extract_contigs_from_cover:
     input:
         gfa = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.gfa",
-        #json = "regions/jsons/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.json",
+        json = "regions/jsons/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.json",
         lemon = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.lemon",
         cover = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.cover"
     output:
@@ -274,8 +283,8 @@ rule map_contigs:
         "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.sorted.bam"
     threads: 10
     shell:
-        "minimap2 -ax asm5 -t {threads} --eqx \
-        {input.ref} {input.fa} | samtools view -b | samtools sort > {output}"
+        "minimap2 -t {threads} --secondary=no -a --eqx -Y -x asm20 -m 10000 -z 10000,50 -r 50000 --end-bonus=100 -O 5,56 -E 4,1 -B 5 \
+        {input.ref} {input.fa} | samtools view -F 260 -u - | samtools sort - > {output}"
 
 rule index_bam:
     input:
@@ -284,3 +293,28 @@ rule index_bam:
         "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.sorted.bam.bai"
     shell:
         "samtools index {input}"
+
+##########
+#Evaluate#
+##########
+
+rule bam_to_bed:
+    input:
+        bam = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.sorted.bam"
+    output:
+        bed = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.sorted.bed"
+    shell:
+        "bedtools bamtobed -i {input.bam} | bedtools sort -i - | cut -f 1,2,3,4,5 > {output.bed}"
+
+rule sd_align_to_ref:
+    input:
+        bed = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.sorted.bed",
+        regions = config["regions"]
+    output:
+        inter = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/inter.bed",
+        rbed = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/SD.resolved.bed",
+        ubed = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/SD.unresolved.bed",
+        sd_bed = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/SD.status.tbl"
+    shell:
+        "bedtools intersect -a {input.bed} -b {input.regions} -wa -wb > {output.inter} && %s/PrintResolvedSegdups.py {output.inter} {input.regions} \
+        --extra 10000 --resolved {output.rbed} --unresolved {output.ubed} --allseg {output.sd_bed}" % (config["tools"]["paftest"])
