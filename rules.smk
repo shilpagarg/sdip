@@ -227,7 +227,7 @@ rule ul_align_to_graph:
     log: "regions/logs/nanopore_alignment/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.log"
     threads: 5
     shell:
-        "GraphAligner -g {input.graph} -f {input.nano} -t {threads} --seeds-mum-count 30000 -a {output.aln} --seeds-mxm-length 10 -b 35 1>{log} 2>&1"
+        "%s -g {input.graph} -f {input.nano} -t {threads} --seeds-mum-count 30000 -a {output.aln} --seeds-mxm-length 10 -b 35 1>{log} 2>&1" % (config["tools"]["graphaligner"])
 
 rule extract_contigs_from_cover:
     input:
