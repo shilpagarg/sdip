@@ -13,3 +13,4 @@ tools:
     paftest: /lustre/scratch115/realdata/mdt3/projects/graphs/yeast/erik/final_exp/segdup/david/WHdenovo/paftest
     bandage: /lustre/scratch115/realdata/mdt3/projects/graphs/yeast/erik/final_exp/segdup/david/bin/Bandage
     mc-mpc: /lustre/scratch115/realdata/mdt3/projects/graphs/yeast/erik/final_exp/segdup/david/bin/mc-mpc
+    graphaligner: /nfs/users/nfs_s/sg20/anaconda3/bin/GraphAligner
