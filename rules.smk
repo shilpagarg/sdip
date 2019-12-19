@@ -48,7 +48,7 @@ rule bamtobed:
 
 rule concat_regions:
     input:
-        expand("regions/segdups/r{region}.tsv", region=regions)
+        expand("regions/segdups/r{region}.tsv", region=all_segdup_regions)
     output:
         "segdups.similar.tsv"
     run:
@@ -199,7 +199,7 @@ rule compute_path_cover:
 
 rule cover_statistics:
     input:
-        expand("regions/gfas/pruned/r{region}.reducted.t{{tip_max_size}}.b{{bubble_max_size}}.d{{degree_max_size}}.cover", region = regions)
+        expand("regions/gfas/pruned/r{region}.reducted.t{{tip_max_size}}.b{{bubble_max_size}}.d{{degree_max_size}}.cover", region = good_regions)
     output:
         "regions/stats/cover.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.txt"
     run:
@@ -269,7 +269,7 @@ rule plot_bandage_pruned:
 
 rule pool_contigs:
     input:
-        expand("regions/contigs/r{i}.t{{tip_max_size}}.b{{bubble_max_size}}.d{{degree_max_size}}.fa", i=regions)
+        expand("regions/contigs/r{i}.t{{tip_max_size}}.b{{bubble_max_size}}.d{{degree_max_size}}.fa", i=good_regions)
     output:
         "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.fa"    
     shell:
