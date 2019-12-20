@@ -185,9 +185,10 @@ rule convert_lemon:
     input:
         gfa = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.gfa"
     output:
-        lemon = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.lemon"
+        lemon = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.lemon",
+        table = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.tbl"
     shell:
-        "python3 %s/convert_to_lemon.py {input.gfa} > {output.lemon}" % (config["tools"]["paftest"])
+        "python3 %s/convert_to_lemon.py {input.gfa} {output.table} > {output.lemon}" % (config["tools"]["paftest"])
 
 rule compute_path_cover:
     input:
@@ -234,13 +235,14 @@ rule extract_contigs_from_cover:
         gfa = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.gfa",
         json = "regions/jsons/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.json",
         lemon = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.lemon",
+        table = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.tbl",
         cover = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.cover"
     output:
         "regions/contigs/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.fa"
     params:
         prefix = "r{region}"
     shell:
-        "python3 %s/contigs_from_nanopore_cover.py --prefix {params.prefix} {input.gfa} {input.lemon} {input.cover} > {output}" % (config["tools"]["paftest"])
+        "python3 %s/contigs_from_nanopore_cover.py --prefix {params.prefix} {input.gfa} {input.lemon} {input.table} {input.cover} --json {input.json} > {output}" % (config["tools"]["paftest"])
 
 
 #############

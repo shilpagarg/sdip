@@ -141,6 +141,7 @@ def main():
 	parser = argparse.ArgumentParser()
 	parser.add_argument('gfa', type = str, help = 'graph in gfa format')
 	parser.add_argument('lemon', type = str, help = 'graph in lemon format')
+	parser.add_argument('table', type = str, help = 'translation table')
 	parser.add_argument('cover', type = str, help = 'mc-mpc solver output')
 	parser.add_argument('--json', type = str, default = "", help = 'nanopore alignments in json format (optional)')
 	parser.add_argument('--print_paths', action = "store_true", help = 'print paths (i.e. list of node names) on stderr')
@@ -174,6 +175,17 @@ def main():
 		line_index += 1
 	sys.stderr.write('Lemon graph read.\n')
 
+	sys.stderr.write('Reading translation table...\n')
+	lemon_id_to_read = {}
+	with open(args.table, 'r') as tab:
+		for line in tab:
+			fields = line.rstrip().split()
+			read_name = fields[0]
+			direction = fields[1]
+			lemon_id = fields[2]
+			lemon_id_to_read[lemon_id] = (read_name, direction)		
+	sys.stderr.write('Translation table read.\n')
+
 	sys.stderr.write('Reading cover...\n')
 	cover_file = open(args.cover, 'r')
 	cover_dict = Counter()
@@ -181,25 +193,23 @@ def main():
 		fields = line.strip().split()
 		arc = fields[0]
 		cover = int(fields[1])
-		id1_full, id2_full = arcs[arc]
-		id1 = id1_full[:-1]
-		if id1_full[-1] == "1":
+		lemon_id1, lemon_id2 = arcs[arc]
+		read_name1, direction1 = lemon_id_to_read[lemon_id1]
+		if direction1 == '+':
 			dir1 = True
-		elif id1_full[-1] == "0":
+		elif direction1 == '-':
 			dir1 = False
 		else:
 			sys.stderr.write('Error reading direction.\n')
-		id2 = id2_full[:-1]
-		if id2_full[-1] == "1":
+		read_name2, direction2 = lemon_id_to_read[lemon_id2]
+		if direction2 == '+':
 			dir2 = True
-		elif id2_full[-1] == "0":
+		elif direction2 == '-':
 			dir2 = False
 		else:
 			sys.stderr.write('Error reading direction.\n')
-		name1 = lookup_nodename(id1, G.nodemap)
-		name2 = lookup_nodename(id2, G.nodemap)
-		cover_dict[((name1, dir1), (name2, dir2))] = cover
-		cover_dict[((name2, not dir2), (name1, not dir1))] = cover
+		cover_dict[((read_name1, dir1), (read_name2, dir2))] = cover
+		cover_dict[((read_name2, not dir2), (read_name1, not dir1))] = cover
 	sys.stderr.write('Cover read.\n')
 
 	print("Start computing all paths..", file=sys.stderr)
