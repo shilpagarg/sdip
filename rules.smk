@@ -1,3 +1,5 @@
+import networkx as nx
+
 def get_samples(wildcards):
     return config["samples"][wildcards.sample]
 
@@ -200,24 +202,38 @@ rule compute_path_cover:
 
 rule cover_statistics:
     input:
-        expand("regions/gfas/pruned/r{region}.reducted.t{{tip_max_size}}.b{{bubble_max_size}}.d{{degree_max_size}}.cover", region = good_regions)
+        covers = expand("regions/gfas/pruned/r{region}.reducted.t{{tip_max_size}}.b{{bubble_max_size}}.d{{degree_max_size}}.cover", region = good_regions),
+        gfas = expand("regions/gfas/pruned/r{region}.reducted.t{{tip_max_size}}.b{{bubble_max_size}}.d{{degree_max_size}}.gfa", region = good_regions)
     output:
-        "regions/stats/cover.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.txt"
+        "regions/stats/stats.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.txt"
     run:
+        assert len(input["covers"]) == len(input["gfas"])
         max_covers = []
-        for i in input:
-            input_file = open(i, "r")
-            max_cover = -1
-            for line in input_file:
-                fields = line.strip().split()
-                if int(fields[1]) > max_cover:
-                    max_cover = int(fields[1])
-            input_file.close()
-            max_covers.append(max_cover)
-        output_file = open(output[0], "w")
-        for i, m in enumerate(max_covers):
-            print("%d\t%d" % (i+1, m), file=output_file)
-        output_file.close()
+        for i in input["covers"]:
+            with open(i, "r") as cover:
+                max_cover = -1
+                for line in cover:
+                    fields = line.strip().split()
+                    if int(fields[1]) > max_cover:
+                        max_cover = int(fields[1])
+                max_covers.append(max_cover)
+
+        component_numbers = []
+        for j in input["gfas"]:
+            with open(j, "r") as gfa:
+                G = nx.Graph()
+                for line in gfa:
+                    if line[0] == 'L':
+                        fields = line.split('\t')
+                        node1 = fields[1]
+                        node2 = fields[3]
+                        G.add_edge(node1, node2)
+                component_numbers.append(nx.number_connected_components(G))
+
+        with open(output[0], "w") as output_file:
+            print("#region\tmax_cover\tnum_components", file=output_file)
+            for k in range(len(input["covers"])):
+                print("%d\t%d\t%d" % (k+1, max_covers[k], component_numbers[k]), file=output_file)
 
 rule ul_align_to_graph:
     input:
