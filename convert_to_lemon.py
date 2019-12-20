@@ -4,75 +4,80 @@ import argparse
 
 def readGFA(gfaFile):
     gfa = open(gfaFile).read().split('\n')[:-1]
-    nodes = set()
     edges= list()
+    key_to_lemon_id = {}
+    lemon_id_to_key = {}
+    running_index = 1
     for line in gfa:
-        if line[0] == 'S':
-            fields = line.split('\t')
-            name = fields[1]
-            parts = name.split("/")
-            run_time = parts[0]
-            zmw_hole_nr = parts[1]
-            lemon_id = zmw_hole_nr[-6:] + run_time[-2:]
-            nodes.add(lemon_id)
-        elif line[0] == 'L':
+        if line[0] == 'L':
             fields = line.split('\t')
             node1 = fields[1]
-            node1_parts = node1.split("/")
-            run_time1 = node1_parts[0]
-            zmw_hole_nr1 = node1_parts[1]
             node1dir = fields[2]
-            id1_full = zmw_hole_nr1[-6:] + run_time1[-2:] + ("1" if node1dir == "+" else "0")
-
+            key1 = (node1, node1dir)
+            if not key1 in key_to_lemon_id:
+                key_to_lemon_id[key1] = running_index
+                lemon_id_to_key[running_index] = key1
+                running_index += 1
+            id1 = key_to_lemon_id[key1]
+            
             node2 = fields[3]
-            node2_parts = node2.split("/")
-            run_time2 = node2_parts[0]
-            zmw_hole_nr2 = node2_parts[1]
             node2dir = fields[4]
-            id2_full = zmw_hole_nr2[-6:] + run_time2[-2:] + ("1" if node2dir == "+" else "0")
+            key2 = (node2, node2dir)
+            if not key2 in key_to_lemon_id:
+                key_to_lemon_id[key2] = running_index
+                lemon_id_to_key[running_index] = key2
+                running_index += 1
+            id2 = key_to_lemon_id[key2]
 
             ovlp = int(fields[5][:-1])
-            edges.append((id1_full, id2_full))
+            edges.append((id1, id2))
     nodes_directed = set()
     for node1, node2 in edges:
-        assert(node1[:-1] in nodes)
-        assert(node2[:-1] in nodes)
         nodes_directed.add(node1)
         nodes_directed.add(node2)
-    return nodes_directed, edges
+    return nodes_directed, edges, key_to_lemon_id, lemon_id_to_key
 
 
-def checkComponents(components):
+def store_to_file(key_to_lemon_id, id_table):
+    with open(id_table, 'w') as f:
+        for key, lemon_id in key_to_lemon_id.items():
+            nodename, nodedir = key
+            print("\t".join([nodename, nodedir, str(lemon_id)]), file=f)
+
+def checkComponents(components, lemon_id_to_key):
     """Check whether any component has both directions of the same read."""
     for component in components:
         seen = set()
         for node in component:
-            node_without_dir = node[:-1]
-            if node_without_dir in seen:
-                print("Error: This graph seems to contain cycles. See node %s." % (node_without_dir), file=sys.stderr)
+            nodename, nodedir = lemon_id_to_key[node]
+            if nodename in seen:
+                print("Error: This graph seems to contain cycles. See node %s." % (nodename), file=sys.stderr)
                 return False
-            seen.add(node_without_dir)
+            seen.add(nodename)
     return True
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('gfa', type = str, help = 'graph in gfa format')
+    parser.add_argument('id_table', type = str, help = 'output table for read to lemon id translation')
     args = parser.parse_args()
     
-    nodes, edges = readGFA(args.gfa)
+    nodes, edges, key_to_lemon_id, lemon_id_to_key = readGFA(args.gfa)
+    store_to_file(key_to_lemon_id, args.id_table)
+    
     G = nx.Graph()
     for node1, node2 in edges:
         G.add_edge(node1, node2)
     components = list(nx.connected_components(G))
-    if not checkComponents(components):
+    if not checkComponents(components, lemon_id_to_key):
         return False
 
     chosen_nodes = []
     for component in components:
         new_component = True
         for node in component:
-            node_without_dir = node[:-1]
-            if (node_without_dir + "1") in chosen_nodes or (node_without_dir + "0") in chosen_nodes:
+            nodename, nodedir = lemon_id_to_key[node]
+            if key_to_lemon_id[(nodename, '+')] in chosen_nodes or key_to_lemon_id[(nodename, '-')] in chosen_nodes:
                 new_component = False
                 break
         if new_component:
