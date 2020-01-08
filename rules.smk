@@ -111,7 +111,7 @@ rule get_pacbio_fastq:
     output:
         temp("regions/fastas_pacbio/r{region}.fastq")
     shell:
-        "LINES=$(wc -l < {input.names}) ; if [ $LINES -lt 20000 ]; then samtools faidx -f -r {input.names} {input.allreads} > {output}; else echo '' > {output}; fi"
+        "LINES=$(wc -l < {input.names}) ; if [ $LINES -lt 20000 ] && [ $LINES -gt 0 ]; then samtools faidx -f -r {input.names} {input.allreads} > {output}; else echo '' > {output}; fi"
 
 rule get_nanopore_fastq:
     input:
@@ -120,7 +120,7 @@ rule get_nanopore_fastq:
     output:
         temp("regions/fastas_nanopore/r{region}.fastq")
     shell:
-        "LINES=$(wc -l < {input.names}) ; if [ $LINES -lt 20000 ]; then samtools faidx -f -r {input.names} {input.allreads} > {output}; else echo '' > {output}; fi"
+        "LINES=$(wc -l < {input.names}) ; if [ $LINES -lt 20000 ] && [ $LINES -gt 0 ]; then samtools faidx -f -r {input.names} {input.allreads} > {output}; else echo '' > {output}; fi"
 
 rule convert_fastq_to_fasta:
     input:

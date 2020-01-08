@@ -44,8 +44,8 @@ def main():
 					if nxt in graph.get_high_degree_nodes():
 						if len(graph.edges[(nxt, not nxt_dir)]) > 1:
 							if len(path) == 1:
-								graph.edges[(last_node, last_orientation)].remove(((nxt, nxt_dir), infos))
-								graph.edges[(nxt, not nxt_dir)].remove(((last_node, not last_orientation), infos))
+								graph.edges[(last_node, last_orientation)] -= {element for element in graph.edges[(last_node, last_orientation)] if element[0] == (nxt, nxt_dir)}
+								graph.edges[(nxt, not nxt_dir)] -= {element for element in graph.edges[(nxt, not nxt_dir)] if element[0] == (last_node, not last_orientation)}
 								print("Remove edge between %s,%s" % (last_node, nxt), file=sys.stderr)
 								edge_removed = True
 								break

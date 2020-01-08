@@ -1,4 +1,5 @@
 #!/usr/bin/python
+import re
 
 class Node:
 	def __init__(self):
@@ -11,6 +12,15 @@ class Node:
 
 def reverse(pos):
 	return ((pos[0], not pos[1]))
+
+def reverse_cigar(cigar):
+	#Reverse CIGAR string
+	ops = re.findall(r'[0-9]+[MDI]', cigar)
+	ops_parsed = [(int(op[:-1]), op[-1]) for op in ops]
+	reversed_operations = {"M": "M", "D": "I", "I": "D"}
+	ops_reversed = [(l, reversed_operations[op]) for l, op in ops_parsed[::-1]]
+	cigar_reversed = "".join(["%d%s" % (l, op) for l, op in ops_reversed])
+	return cigar_reversed
 
 class Graph:
 	def _parse_node(self, parts):
@@ -46,7 +56,8 @@ class Graph:
 				if frompos not in self.edges: self.edges[frompos] = set()
 				if reverse(topos) not in self.edges: self.edges[reverse(topos)] = set()
 				tags = parts[6:]
-				self.edges[reverse(topos)].add((reverse(frompos), (overlap, "\t".join(tags))))
+				cigar = tags[2]
+				self.edges[reverse(topos)].add((reverse(frompos), (overlap, "\t".join(tags[0:2] + [reverse_cigar(cigar)] + tags[3:]))))
 				self.edges[frompos].add((topos, (overlap, "\t".join(tags))))
 	def remove_nonexistent_edges(self):
 		extra = []
