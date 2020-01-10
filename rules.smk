@@ -1,4 +1,5 @@
 import networkx as nx
+from collections import defaultdict
 
 def get_samples(wildcards):
     return config["samples"][wildcards.sample]
@@ -6,7 +7,8 @@ def get_samples(wildcards):
 wildcard_constraints:
     region="\d+",
     tip_max_size="\d+",
-    bubble_max_size="\d+"
+    bubble_max_size="\d+",
+    degree_max_size="\d+"
 
 #############################
 #Find similar segdup regions#
@@ -254,12 +256,84 @@ rule extract_contigs_from_cover:
         table = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.tbl",
         cover = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.cover"
     output:
-        "regions/contigs/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.fa"
+        contigs = "regions/contigs/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.fa",
+        reads = "regions/polishing/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/reads.tsv"
     params:
         prefix = "r{region}"
     shell:
-        "python3 %s/contigs_from_nanopore_cover.py --prefix {params.prefix} {input.gfa} {input.lemon} {input.table} {input.cover} --json {input.json} > {output}" % (config["tools"]["paftest"])
+        "python3 %s/contigs_from_nanopore_cover.py --prefix {params.prefix} {input.gfa} {input.lemon} {input.table} {input.cover} --json {input.json} --paths {output.reads} > {output.contigs}" % (config["tools"]["paftest"])
 
+rule polish_contigs:
+    input:
+        contigs = "regions/contigs/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.fa",
+        reads = "regions/polishing/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/reads.tsv",
+        allreads = config["reads"]["pacbio"]
+    output:
+        contigs = "regions/contigs/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.fa"
+    params:
+        wd = "regions/polishing/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/"
+    threads: 4
+    run:
+        with open(input["contigs"], 'r') as contigs_file:
+            content = contigs_file.read()
+        if len(content) < 1:
+            shell("touch {output.contigs}")
+        else:
+            #Extract contigs into separate files
+            shell("samtools faidx {input.contigs}")
+            fai_path = input["contigs"] + ".fai"
+            with open(fai_path, 'r') as index_file:
+                num = 0
+                for line in index_file:
+                    fields = line.strip().split()
+                    name = fields[0]
+                    num += 1
+                    path = params["wd"] + "contig%d.fa" % (num)
+                    shell("samtools faidx {input.contigs} {name} > {path}")
+            num_haps = num
+            
+            #Store reads for each contig
+            with open(input["reads"], 'r') as read_file:
+                reads = defaultdict(list)
+                for line in read_file:
+                    fields = line.strip().split()
+                    num = int(fields[0])
+                    assert num <= num_haps
+                    reads[num].append(fields[1])
+            
+            #Polish each contig
+            for num in range(1, num_haps + 1):
+                reads_path = params["wd"] + "reads%d.txt" % (num)
+                with open(reads_path, 'w') as read_file:
+                    for r in reads[num]:
+                        print(r, file=read_file)
+                fastq_path = params["wd"] + "reads%d.fq" % (num)
+                fasta_path = params["wd"] + "reads%d.fa" % (num)
+                shell("samtools faidx -f -r {reads_path} {input.allreads} > {fastq_path}")
+                shell("seqtk seq -A {fastq_path} > {fasta_path}")
+                contig_path = params["wd"] + "contig%d.fa" % (num)
+                bam_path = params["wd"] + "aligned%d.bam" % (num)
+                shell("minimap2 -ax map-pb -t4 {contig_path} {fasta_path} | samtools view -b | samtools sort > {bam_path}")
+                shell("samtools index {bam_path}")
+                pileup_path = params["wd"] + "pileup%d.vcf" % (num)
+                snps_path = params["wd"] + "snps%d.vcf.gz" % (num)
+                indels_path = params["wd"] + "indels%d.vcf.gz" % (num)
+                calls_path = params["wd"] + "calls%d.vcf.gz" % (num)
+                shell("bcftools mpileup -Q0 -o20 -e10 -Ov -f {contig_path} {bam_path} > {pileup_path}")
+                shell("bcftools view -m2 -M3 -v snps -i 'DP > 3 & (I16[2] + I16[3]) / (I16[0] + I16[1]) > 1' -Oz {pileup_path} > {snps_path}")
+                shell("bcftools index {snps_path}")
+                shell("bcftools view -m2 -M2 -v indels -i 'DP > 3 & (I16[2] + I16[3]) / (I16[0] + I16[1]) > 1 & IMF>0.5' -Oz {pileup_path} > {indels_path}")
+                shell("bcftools index {indels_path}")
+                shell("bcftools concat {snps_path} {indels_path} | bcftools sort -Oz > {calls_path}")
+                shell("bcftools index {calls_path}")
+                norm_path = params["wd"] + "calls%d.norm.bcf" % (num)
+                consensus_path = params["wd"] + "consensus%d.fa" % (num)
+                shell("bcftools norm -f {contig_path} {calls_path} -Ob -o {norm_path}")
+                shell("bcftools index {norm_path}")
+                shell("cat {contig_path} | bcftools consensus {norm_path} > {consensus_path}")
+            
+            #Concat polished contigs
+            shell("cat %s > {output.contigs}" % (" ".join([(params["wd"] + "consensus%d.fa" % (num)) for num in range(1, num_haps + 1)])))
 
 #############
 #Plot graphs#
@@ -287,18 +361,18 @@ rule plot_bandage_pruned:
 
 rule pool_contigs:
     input:
-        expand("regions/contigs/r{i}.t{{tip_max_size}}.b{{bubble_max_size}}.d{{degree_max_size}}.fa", i=good_regions)
+        expand("regions/contigs/r{i}.t{{tip_max_size}}.b{{bubble_max_size}}.d{{degree_max_size}}.polished.fa", i=good_regions)
     output:
-        "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.fa"    
+        "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.fa"
     shell:
         "cat {input} > {output}"
 
 rule map_contigs:
     input:
-        fa = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.fa",
+        fa = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.fa",
         ref = config["genome"]
     output:
-        "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.sorted.bam"
+        "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.sorted.bam"
     threads: 10
     shell:
         "minimap2 -t {threads} --secondary=no -a --eqx -Y -x asm20 -m 10000 -z 10000,50 -r 50000 --end-bonus=100 -O 5,56 -E 4,1 -B 5 \
@@ -306,9 +380,9 @@ rule map_contigs:
 
 rule index_bam:
     input:
-        "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.sorted.bam"
+        "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.sorted.bam"
     output:
-        "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.sorted.bam.bai"
+        "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.sorted.bam.bai"
     shell:
         "samtools index {input}"
 
@@ -318,15 +392,15 @@ rule index_bam:
 
 rule bam_to_bed:
     input:
-        bam = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.sorted.bam"
+        bam = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.sorted.bam"
     output:
-        bed = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.sorted.bed"
+        bed = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.sorted.bed"
     shell:
         "bedtools bamtobed -i {input.bam} | bedtools sort -i - | cut -f 1,2,3,4,5 > {output.bed}"
 
 rule sd_align_to_ref:
     input:
-        bed = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.sorted.bed",
+        bed = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.sorted.bed",
         regions = config["regions"]
     output:
         inter = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/inter.bed",

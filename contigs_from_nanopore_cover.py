@@ -145,6 +145,7 @@ def main():
 	parser.add_argument('cover', type = str, help = 'mc-mpc solver output')
 	parser.add_argument('--json', type = str, default = "", help = 'nanopore alignments in json format (optional)')
 	parser.add_argument('--print_paths', action = "store_true", help = 'print paths (i.e. list of node names) on stderr')
+	parser.add_argument('--paths', type = str, default = "", help = 'output paths (i.e. list of node names) in given file')
 	parser.add_argument('--prefix', type = str, default = "", help = 'contig name prefix (default: no prefix)')
 	args = parser.parse_args()
 
@@ -232,6 +233,8 @@ def main():
 	hap_count = 0
 	remove_uncovered_edges(G, cover_dict)
 	G.removeLonelyNodes()
+	if args.paths != "":
+		paths_file = open(args.paths, 'w')
 	if args.json != "":
 		print("Start extracting paths from nanopore alignments..", file=sys.stderr)
 		cover_dict_copy = deepcopy(cover_dict)
@@ -271,6 +274,9 @@ def main():
 							print('>hap%d len=%d' % (hap_count, len(path_seq)))
 						else:
 							print('>%s_hap%d len=%d' % (args.prefix, hap_count, len(path_seq)))
+						if args.paths != "":
+							for node, direction in chosen_path:
+								print("%d\t%s" % (hap_count, node), file=paths_file)
 						print(path_seq)
 						if args.print_paths:
 							print("Path %d: " % (hap_count) + ",".join([node for node, direction in chosen_path]), file=sys.stderr)
@@ -290,6 +296,9 @@ def main():
 			print('>hap%d len=%d' % (hap_count, len(path_seq)))
 		else:
 			print('>%s_hap%d len=%d' % (args.prefix, hap_count, len(path_seq)))
+		if args.paths != "":
+			for node, direction in path:
+				print("%d\t%s" % (hap_count, node), file=paths_file)
 		print(path_seq)
 		if args.print_paths:
 			print("Path %d: " % (hap_count) + ",".join([node for node, direction in path]), file=sys.stderr)
