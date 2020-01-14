@@ -2,7 +2,8 @@ genome:
     /lustre/scratch115/realdata/mdt3/projects/graphs/yeast/erik/final_exp/segdup/david/ref/GCA_000001405.15_GRCh38_no_alt_analysis_set.fa
 
 regions:
-    /lustre/scratch115/realdata/mdt3/projects/graphs/yeast/erik/final_exp/segdup/david/ccs_vs_hg38/table8_all.15kbWindow.merged.bed
+    original: /lustre/scratch115/realdata/mdt3/projects/graphs/yeast/erik/final_exp/segdup/david/ccs_vs_hg38/table8_all.bed
+    slop15k: /lustre/scratch115/realdata/mdt3/projects/graphs/yeast/erik/final_exp/segdup/david/ccs_vs_hg38/table8_all.15kbWindow.merged.bed
 
 reads:
     pacbio: /lustre/scratch115/realdata/mdt3/projects/graphs/yeast/erik/final_exp/segdup/david/reads.pacbio.fastq
