@@ -28,4 +28,5 @@ rule all:
                                                                                                      degree_max_size=[2]),
         "regions/contigs/pooled.t5.b5.d2.polished.sorted.bam.bai",
         "regions/stats/stats.t5.b5.d2.txt",
-        "regions/eval/t5.b5.d2/inter.bed"
+        "regions/eval/t5.b5.d2/inter.bed",
+        "regions/eval/t5.b5.d2/bacs/qv_sum.txt"
