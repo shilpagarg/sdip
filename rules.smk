@@ -457,10 +457,14 @@ rule make_qv_sum:
         out = ""
         sys.stderr.write(input["bac_tbl"] + "\n")
         df = pd.read_csv(input["bac_tbl"], sep="\t")
-        val = 1 - df["perID_by_all"]/100
-        df["qv"] = -10 * np.log10( val )
-        for mask in [True, False]:            
+        val_all = 1 - df["perID_by_all"]/100
+        val_matches = 1 - df["perID_by_matches"]/100
+        df["qv_all"] = -10 * np.log10( val_all )
+        df["qv_matches"] = -10 * np.log10( val_matches )
+        for mask in [True, False]:
             tmp = df[df["mask"] == mask]
-            perfect = tmp["qv"].isna()
-            out += "{}\nPerfect\t{}\n{}\n\n".format(input["bac_tbl"], sum(perfect), tmp.qv.describe()   )
+            perfect = tmp["qv_all"].isna()
+            out += "Segdup BACs? = {}\nPercent identity of all\nPerfect\t{}\n{}\n\n".format(mask, sum(perfect), tmp.qv_all.describe()   )
+            perfect = tmp["qv_matches"].isna()
+            out += "Segdup BACs? = {}\nPercent identity of matches only\nPerfect\t{}\n{}\n\n".format(mask, sum(perfect), tmp.qv_matches.describe()   )
         open(output["qv_sum"], "w+").write(out)
