@@ -389,6 +389,18 @@ rule index_bam:
     shell:
         "samtools index {input}"
 
+rule find_misassemblies:
+    input:
+        "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.sorted.bam"
+    output:
+        primary_noclip = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/contigs.primary.noclip.tsv",
+        primary_clip = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/contigs.primary.withclip.tsv",
+        supplementary = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/contigs.supplementary.tsv"
+    run:
+        shell("samtools view -F 2048 {input} | awk '{{ match($6, \"^([0-9]+)S\", mat1); match($6, \"([0-9]+)S$\", mat2); print $1, mat1[1] + mat2[1] }}' | awk '{{ if ($2 < 10) {{print $1}} }}' | sort -k 1,1 | uniq > {output.primary_noclip}")
+        shell("samtools view -F 2048 {input} | awk '{{ match($6, \"^([0-9]+)S\", mat1); match($6, \"([0-9]+)S$\", mat2); print $1, mat1[1] + mat2[1] }}' | awk '{{ if ($2 >= 10) {{print $1}} }}' | sort -k 1,1 | uniq > {output.primary_clip}")
+        shell("samtools view -f 2048 {input} | cut -f 1 | sort -k 1,1 | uniq > {output.supplementary}")
+
 ##########
 #Evaluate#
 ##########
