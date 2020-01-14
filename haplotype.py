@@ -518,9 +518,9 @@ def variantCall(targetName, paflines, outputCov):
 
         else:
             if query_info["target_start"] <= 20 and query_info["target_length"] - query_info["target_end"] <= 20 and (query_name in C1 or query_name in dash):
-                contained.add(target_name)
+                contained.add((target_name, query_name))
             elif query_info["query_start"] <= 20 and query_info["query_length"] - query_info["query_end"] <= 20 and (query_name in C1 or query_name in dash):
-                contained.add(query_name)
+                contained.add((query_name, target_name))
             continue
         if query_name in C1:
             L.append(C1[query_name])
@@ -903,16 +903,18 @@ def main():
 
     Llines = []
     contained = set()
+    contained_nodes = set()
     calls = {}
     for proc in processes:
         targetName, Llines_block, contained_block, calls_block = proc.get()
         Llines.extend(Llines_block)
         contained = contained.union(contained_block)
+        contained_nodes = contained_nodes.union({n for n, i in contained_block})
         calls[targetName] = calls_block
 
     co = open('.'.join(args.output.split('.')[:-1]) + '.contained.reads', 'w')
-    for i in contained:
-        co.write(i+'\n')
+    for contained_read, contained_in in contained:
+        co.write('%s\t%s\n' % (contained_read, contained_in))
     co.close()
 
     outputVariant(args.output_variant, calls)
@@ -922,8 +924,8 @@ def main():
     count = 0
     if len(blocks) > 0:
         for L in Llines:
-            if L[0] in contained or L[5] in contained:
-                if L[0] in contained:
+            if L[0] in contained_nodes or L[5] in contained_nodes:
+                if L[0] in contained_nodes:
                     log(L[0], 'is contained')
                 else:
                     log(L[5], 'is contained')
