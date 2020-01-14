@@ -14,7 +14,8 @@ all_segdup_regions = range(1, 605)
 filtered_segdup_regions = range(1, 505)
 big_regions = [17, 32, 96, 101, 102, 108, 162, 166, 216, 217, 218, 267, 268, 275, 278, 285, 296, 306, 307, 433, 467, 470, 471, 503, 504]
 cycle_regions = [136, 187, 188, 189, 21, 227, 266, 269, 276, 333, 334, 34, 347, 361, 388, 423, 435, 440, 476, 488, 491, 500]
-good_regions = [r for r in filtered_segdup_regions if (not r in big_regions) and (not r in cycle_regions)]
+duplicate_regions = []
+good_regions = [r for r in filtered_segdup_regions if (not r in big_regions) and (not r in cycle_regions) and (not r in duplicate_regions)]
 
 include: "/lustre/scratch115/realdata/mdt3/projects/graphs/yeast/erik/final_exp/segdup/david/WHdenovo/paftest/rules.smk"
 
