@@ -147,7 +147,8 @@ rule generate_graph_use_paf:
         fasta = "regions/fastas_pacbio/r{region}.fasta",
         paf = "regions/pafs/r{region}.fasta.filtered.paf"
     output:
-        gfa = "regions/gfas/r{region}.reducted.gfa"
+        gfa = "regions/gfas/r{region}.reducted.gfa",
+        contained = "regions/gfas/r{region}.contained.reads"
     threads: 3
     params:
         output = "regions/gfas/r{region}.gfa"
@@ -260,6 +261,7 @@ rule polish_contigs:
     input:
         contigs = "regions/contigs/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.fa",
         reads = "regions/polishing/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/reads.tsv",
+        contained_reads = "regions/gfas/r{region}.contained.reads",
         allreads = config["reads"]["pacbio"]
     output:
         contigs = "regions/contigs/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.fa"
@@ -293,6 +295,14 @@ rule polish_contigs:
                     num = int(fields[0])
                     assert num <= num_haps
                     reads[num].append(fields[1])
+            
+            #Add contained reads
+            with open(input["contained_reads"], 'r') as contained_file:
+                for num in range(1, num_haps + 1):
+                    for line in contained_file:
+                        fields = line.strip().split()
+                        if fields[1] in reads[num]:
+                            reads[num].append(fields[0])
             
             #Polish each contig
             for num in range(1, num_haps + 1):
