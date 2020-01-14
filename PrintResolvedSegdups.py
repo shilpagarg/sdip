@@ -5,6 +5,7 @@ import argparse
 ap = argparse.ArgumentParser(description="Determine which segdups are assembled and which split contigs.")
 ap.add_argument("tab", help="Table of contig/segdup intersection.  bedtools intersect -a contigs.bed -b segdups.bed -wa -wb")
 ap.add_argument("segdups", help="Original segdups file.")
+ap.add_argument("fai", help="Genome fasta index.")
 ap.add_argument("--extra", help="Required amount on the side of a segdup to count as resolved.", type=int, default=20000)
 ap.add_argument("--resolved", help="Print resolved segdups here.", default=None)
 ap.add_argument("--unresolved", help="Print unresolved segdups here.", default=None)
@@ -32,11 +33,16 @@ for line in segdupLines:
 	start = int(vals[1]) 
 	end = int(vals[2])
 	segdups["_".join(vals[0:3])] = (False, -( end-start) )
-		
+
 r = open(args.resolved, 'w')
 u = open(args.unresolved, 'w')
 a = open(args.allseg, 'w')
 
+contig_lengths = dict()
+with open(args.fai, 'r') as fai_file:
+	for line in fai_file:
+		fields = line.strip().split()
+		contig_lengths[fields[0]] = int(fields[1])
 
 for line in tabFile:
 	vals = line.split()
@@ -50,29 +56,28 @@ for line in tabFile:
 	segdup = "_".join(vals[5:8])
 	pref_suff = min(pref, suff)
 	if pref_suff > segdups[segdup][1]:
-	    if (pref > args.extra and suff > args.extra):
-		    segdups[segdup] = (True, min(pref, suff))
-	    else:
-		    segdups[segdup] = (False, min(pref, suff))
+		if (ctgStart < 10 or pref > args.extra) and (contig_lengths[ctgChrom] - ctgEnd < 10 or suff > args.extra):
+			segdups[segdup] = (True, min(pref, suff))
+		else:
+			segdups[segdup] = (False, min(pref, suff))
 	#		r.write("\t".join(vals[5:8]) + "\n")
 	#	else:
 	#		u.write("\t".join(vals[5:8]) + "\n")
 
 for line in segdupLines:
-    vals = line.split()
-    segdup = "_".join(vals[0:3])
-    if (segdups[segdup][0] == True):
-        r.write(line)
-    else:
-        u.write(line)
-    # wirte all entreis
-    vals.append( str(segdups[segdup][1]) )
-    line = "\t".join(vals)  + "\n"
-    a.write(line)
+	vals = line.split()
+	segdup = "_".join(vals[0:3])
+	if (segdups[segdup][0] == True):
+		r.write(line)
+	else:
+		u.write(line)
+	# wirte all entreis
+	vals.append( str(segdups[segdup][1]) )
+	line = "\t".join(vals)  + "\n"
+	a.write(line)
 
 r.close()
 u.close()
 a.close()
 
-		
 

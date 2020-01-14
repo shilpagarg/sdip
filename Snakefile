@@ -26,9 +26,6 @@ rule all:
                                                                                                      tip_max_size=[5],
                                                                                                      bubble_max_size=[5],
                                                                                                      degree_max_size=[2]),
-        expand("regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.fa", tip_max_size=[5],
-                                                                                                  bubble_max_size=[5],
-                                                                                                  degree_max_size=[2]),
         "regions/contigs/pooled.t5.b5.d2.polished.sorted.bam.bai",
         "regions/stats/stats.t5.b5.d2.txt",
         "regions/eval/t5.b5.d2/inter.bed"

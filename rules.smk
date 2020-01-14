@@ -14,18 +14,9 @@ wildcard_constraints:
 #Find similar segdup regions#
 #############################
 
-rule slop_15k:
-    input:
-        regions = config["regions"],
-        genome = config["genome"] + ".fai"
-    output:
-        regions = "regions/segdups/regions.slop15k.bed"
-    shell:
-        "bedtools slop -i {input.regions} -g {input.genome} -b 15000 > {output.regions}"
-
 rule fetch_segdup_sequences:
     input:
-        regions = "regions/segdups/regions.slop15k.bed",
+        regions = config["regions"]["slop15k"],
         reference = config["genome"]
     output:
         "regions/segdups/r{region}.fa"
@@ -401,12 +392,13 @@ rule bam_to_bed:
 rule sd_align_to_ref:
     input:
         bed = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.sorted.bed",
-        regions = config["regions"]
+        regions = config["regions"]["original"],
+        index = config["genome"] + ".fai"
     output:
         inter = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/inter.bed",
         rbed = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/SD.resolved.bed",
         ubed = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/SD.unresolved.bed",
         sd_bed = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/SD.status.tbl"
     shell:
-        "bedtools intersect -a {input.bed} -b {input.regions} -wa -wb > {output.inter} && %s/PrintResolvedSegdups.py {output.inter} {input.regions} \
+        "bedtools intersect -a {input.bed} -b {input.regions} -wa -wb > {output.inter} && %s/PrintResolvedSegdups.py {output.inter} {input.regions} {input.index}\
         --extra 10000 --resolved {output.rbed} --unresolved {output.ubed} --allseg {output.sd_bed}" % (config["tools"]["paftest"])
