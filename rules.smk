@@ -1,4 +1,6 @@
 import networkx as nx
+import pandas as pd
+import numpy as np
 from collections import defaultdict
 
 def get_samples(wildcards):
@@ -402,3 +404,41 @@ rule sd_align_to_ref:
     shell:
         "bedtools intersect -a {input.bed} -b {input.regions} -wa -wb > {output.inter} && %s/PrintResolvedSegdups.py {output.inter} {input.regions} {input.index}\
         --extra 10000 --resolved {output.rbed} --unresolved {output.ubed} --allseg {output.sd_bed}" % (config["tools"]["paftest"])
+
+rule align_bac_to_asm:
+    input:
+        asm = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.fa",
+        bacs = config["bacs"]["fasta"]
+    output:
+        bam = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/bacs/bacs.to.asm.bam"
+    threads: 10
+    shell:
+        "minimap2 -I 8G -t {threads} --secondary=no -a --eqx -Y -x asm20 -m 10000 -z 10000,50 -r 50000 --end-bonus=100 -O 5,56 -E 4,1 -B 5 \
+        {input.asm} {input.bacs} | samtools view -F 2308 -u - | samtools sort - > {output.bam}"
+
+rule bac_to_asm_tbl:
+    input:
+        bam = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/bacs/bacs.to.asm.bam",
+        names = config["bacs"]["names"]
+    output:
+        tbl = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/bacs/bacs.to.asm.tbl"
+    shell:
+        "python3 %s/samIdentity.py --header --mask {input.names} {input.bam} > {output.tbl}" % (config["tools"]["paftest"])
+
+rule make_qv_sum:
+    input:
+        bac_tbl = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/bacs/bacs.to.asm.tbl"
+    output:
+        qv_sum = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/bacs/qv_sum.txt"
+    run:
+        pd.options.mode.use_inf_as_na = True
+        out = ""
+        sys.stderr.write(input["bac_tbl"] + "\n")
+        df = pd.read_csv(input["bac_tbl"], sep="\t")
+        val = 1 - df["perID_by_all"]/100
+        df["qv"] = -10 * np.log10( val )
+        for mask in [True, False]:            
+            tmp = df[df["mask"] == mask]
+            perfect = tmp["qv"].isna()
+            out += "{}\nPerfect\t{}\n{}\n\n".format(input["bac_tbl"], sum(perfect), tmp.qv.describe()   )
+        open(output["qv_sum"], "w+").write(out)
