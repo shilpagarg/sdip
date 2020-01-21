@@ -6,6 +6,9 @@ from collections import defaultdict
 def get_samples(wildcards):
     return config["samples"][wildcards.sample]
 
+def get_regions(wildcards):
+    return config["regions"]["original"][wildcards.name]
+
 wildcard_constraints:
     region="\d+",
     tip_max_size="\d+",
@@ -370,88 +373,164 @@ rule pool_contigs:
     shell:
         "cat {input} > {output}"
 
-rule map_contigs:
+rule map_contigs_to_assembly:
     input:
-        fa = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.fa",
+        fa = "regions/contigs/pooled.{name}.polished.fa",
         ref = config["genome"]
     output:
-        "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.sorted.bam"
+        "regions/eval/{name}/bams/polished.to.assembly.bam"
     threads: 10
     shell:
         "minimap2 -t {threads} --secondary=no -a --eqx -Y -x asm20 -m 10000 -z 10000,50 -r 50000 --end-bonus=100 -O 5,56 -E 4,1 -B 5 \
         {input.ref} {input.fa} | samtools view -F 260 -u - | samtools sort - > {output}"
 
-rule index_bam:
+rule map_contigs_to_bacs:
     input:
-        "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.sorted.bam"
-    output:
-        "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.sorted.bam.bai"
-    shell:
-        "samtools index {input}"
-
-rule find_misassemblies:
-    input:
-        "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.sorted.bam"
-    output:
-        primary_noclip = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/contigs.primary.noclip.tsv",
-        primary_clip = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/contigs.primary.withclip.tsv",
-        supplementary = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/contigs.supplementary.tsv"
-    run:
-        shell("samtools view -F 2048 {input} | awk '{{ match($6, \"^([0-9]+)S\", mat1); match($6, \"([0-9]+)S$\", mat2); print $1, mat1[1] + mat2[1] }}' | awk '{{ if ($2 < 10) {{print $1}} }}' | sort -k 1,1 | uniq > {output.primary_noclip}")
-        shell("samtools view -F 2048 {input} | awk '{{ match($6, \"^([0-9]+)S\", mat1); match($6, \"([0-9]+)S$\", mat2); print $1, mat1[1] + mat2[1] }}' | awk '{{ if ($2 >= 10) {{print $1}} }}' | sort -k 1,1 | uniq > {output.primary_clip}")
-        shell("samtools view -f 2048 {input} | cut -f 1 | sort -k 1,1 | uniq > {output.supplementary}")
-
-##########
-#Evaluate#
-##########
-
-rule bam_to_bed:
-    input:
-        bam = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.sorted.bam"
-    output:
-        bed = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.sorted.bed"
-    shell:
-        "bedtools bamtobed -i {input.bam} | bedtools sort -i - | cut -f 1,2,3,4,5 > {output.bed}"
-
-rule sd_align_to_ref:
-    input:
-        bed = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.sorted.bed",
-        regions = config["regions"]["original"],
-        index = config["genome"] + ".fai"
-    output:
-        inter = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/inter.bed",
-        rbed = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/SD.resolved.bed",
-        ubed = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/SD.unresolved.bed",
-        sd_bed = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/SD.status.tbl"
-    shell:
-        "bedtools intersect -a {input.bed} -b {input.regions} -wa -wb > {output.inter} && %s/PrintResolvedSegdups.py {output.inter} {input.regions} {input.index}\
-        --extra 10000 --resolved {output.rbed} --unresolved {output.ubed} --allseg {output.sd_bed}" % (config["tools"]["paftest"])
-
-rule align_bac_to_asm:
-    input:
-        asm = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.fa",
+        asm = "regions/contigs/pooled.{name}.polished.fa",
         bacs = config["bacs"]["fasta"]
     output:
-        bam = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/bacs/bacs.to.asm.bam"
+        bam = "regions/eval/{name}/bams/polished.to.bacs.bam"
+    threads: 10
+    shell:
+        "minimap2 -I 8G -t {threads} --secondary=no -a --eqx -Y -x asm20 \
+        {input.bacs} {input.asm} | samtools view -F 2308 -u - | samtools sort - > {output.bam}"
+
+rule map_bacs_to_contigs:
+    input:
+        asm = "regions/contigs/pooled.{name}.polished.fa",
+        bacs = config["bacs"]["fasta"]
+    output:
+        bam = "regions/eval/{name}/bams/bacs.to.polished.bam"
     threads: 10
     shell:
         "minimap2 -I 8G -t {threads} --secondary=no -a --eqx -Y -x asm20 -m 10000 -z 10000,50 -r 50000 --end-bonus=100 -O 5,56 -E 4,1 -B 5 \
         {input.asm} {input.bacs} | samtools view -F 2308 -u - | samtools sort - > {output.bam}"
 
-rule bac_to_asm_tbl:
+rule index_bam:
     input:
-        bam = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/bacs/bacs.to.asm.bam",
-        names = config["bacs"]["names"]
+        "{name}.bam"
     output:
-        tbl = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/bacs/bacs.to.asm.tbl"
+        "{name}.bam.bai"
+    shell:
+        "samtools index {input}"
+
+rule map_contigs_to_hg38:
+    input:
+        asm = "regions/contigs/pooled.{name}.polished.fa",
+        hg38 = config["hg38"]
+    output:
+        bam = "regions/eval/{name}/bams/polished.to.hg38.bam"
+    threads: 10
+    shell:"""
+minimap2 -t {threads} --secondary=no -a -Y -x asm20 \
+    -m 10000 -z 10000,50 -r 50000 --end-bonus=100 -O 5,56 -E 4,1 -B 5 \
+     {input.hg38} {input.asm} | samtools view -F 260 -u - | samtools sort -@ {threads} - > {output.bam}
+"""
+
+rule map_bacs_to_assembly:
+    input:
+        bacs = config["bacs"]["fasta"],
+        ref = config["genome"]
+    output:
+        "regions/eval/bams/bacs.to.assembly.bam"
+    threads: 10
+    shell:
+        "minimap2 -t {threads} --secondary=no -a --eqx -Y -x asm20 -m 10000 -z 10000,50 -r 50000 --end-bonus=100 -O 5,56 -E 4,1 -B 5 \
+        {input.ref} {input.bacs} | samtools view -F 260 -u - | samtools sort - > {output}"
+
+rule map_bacs_to_hg38:
+    input:
+        hg38 = config["hg38"],
+        sd = config["bacs"]["segdups"], 
+        bacs = config["bacs"]["fasta"],
+    output:
+        bam = "regions/eval/bams/bacs.to.hg38.bam",
+        names = "regions/eval/bams/bacs.in.sd.names",
+    threads: 10
+    shell:"""
+minimap2 -t {threads} --secondary=no -a -Y -x asm20 \
+    -m 10000 -z 10000,50 -r 50000 --end-bonus=100 -O 5,56 -E 4,1 -B 5 \
+     {input.hg38} {input.bacs} | samtools view -F 260 -u - | samtools sort -@ {threads} - > {output.bam}
+
+bedtools intersect -a {output.bam} -b {input.sd} | samtools view - | awk '{{print $1}}' > {output.names}
+"""
+
+##########
+#Evaluate#
+##########
+
+rule quast_to_assembly:
+    input:
+        fa = "regions/contigs/pooled.{name}.polished.fa",
+        ref = config["genome"]
+    output:
+        "regions/eval/{name}/quast_to_assembly/report.html"
+    params:
+        wd = "regions/eval/{name}/quast_to_assembly"
+    shell:
+        "%s --fragmented --no-icarus -o {params.wd} -r {input.ref} {input.fa}" % (config["tools"]["quast"])
+
+rule quast_to_bacs:
+    input:
+        fa = "regions/contigs/pooled.{name}.polished.fa",
+        ref = config["bacs"]["fasta"]
+    output:
+        "regions/eval/{name}/quast_to_bacs/report.html"
+    params:
+        wd = "regions/eval/{name}/quast_to_bacs"
+    shell:
+        "%s --fragmented --no-icarus -o {params.wd} -r {input.ref} {input.fa}" % (config["tools"]["quast"])
+
+rule quast_to_hg38:
+    input:
+        fa = "regions/contigs/pooled.{name}.polished.fa",
+        ref = config["hg38"]
+    output:
+        "regions/eval/{name}/quast_to_hg38/report.html"
+    params:
+        wd = "regions/eval/{name}/quast_to_hg38"
+    shell:
+        "%s --fragmented --no-icarus -o {params.wd} -r {input.ref} {input.fa}" % (config["tools"]["quast"])
+
+rule bam_to_bed:
+    input:
+        bam = "{name}.bam"
+    output:
+        bed = "{name}.bed"
+    shell:
+        "bedtools bamtobed -i {input.bam} | bedtools sort -i - | cut -f 1,2,3,4,5 > {output.bed}"
+
+rule count_resolved_segdup_regions_assembly:
+    input:
+        bed = "regions/eval/{name}/bams/polished.to.assembly.bed",
+        regions = get_regions,
+        index = config["genome"] + ".fai"
+    output:
+        inter = "regions/eval/{name}/resolved/inter.bed",
+        rbed = "regions/eval/{name}/resolved/SD.resolved.bed",
+        ubed = "regions/eval/{name}/resolved/SD.unresolved.bed",
+        sd_bed = "regions/eval/{name}/resolved/SD.status.tbl"
+    shell:
+        "bedtools intersect -a {input.bed} -b {input.regions} -wa -wb > {output.inter} && %s/PrintResolvedSegdups.py {output.inter} {input.regions} {input.index}\
+        --extra 10000 --resolved {output.rbed} --unresolved {output.ubed} --allseg {output.sd_bed}" % (config["tools"]["paftest"])
+
+ruleorder: count_resolved_segdup_regions_assembly > bam_to_bed
+
+
+rule bacs_to_contigs_tbl:
+    input:
+        bam = "regions/eval/{name}/bams/bacs.to.polished.bam",
+        names = "regions/eval/bams/bacs.in.sd.names"
+    output:
+        tbl = "regions/eval/{name}/bacs/bacs.to.polished.tbl"
     shell:
         "python3 %s/samIdentity.py --header --mask {input.names} {input.bam} > {output.tbl}" % (config["tools"]["paftest"])
 
 rule make_qv_sum:
     input:
-        bac_tbl = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/bacs/bacs.to.asm.tbl"
+        bac_tbl = "regions/eval/{name}/bacs/bacs.to.polished.tbl"
     output:
-        qv_sum = "regions/eval/t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/bacs/qv_sum.txt"
+        qv_sum = "regions/eval/{name}/bacs/qv_sum.txt"
     run:
         pd.options.mode.use_inf_as_na = True
         out = ""
@@ -468,3 +547,33 @@ rule make_qv_sum:
             perfect = tmp["qv_matches"].isna()
             out += "Segdup BACs? = {}\nPercent identity of matches only\nPerfect\t{}\n{}\n\n".format(mask, sum(perfect), tmp.qv_matches.describe()   )
         open(output["qv_sum"], "w+").write(out)
+
+#########
+#SV Call#
+#########
+
+rule svim_call_contigs:
+    input:
+        bam =  "regions/eval/{name}/bams/polished.to.hg38.bam",
+        bai =  "regions/eval/{name}/bams/polished.to.hg38.bam.bai",
+        genome = config["hg38"]
+    output:
+        "regions/svim/{name}/contigs.haploid/variants.vcf"
+    params:
+        working_dir = "regions/svim/{name}/contigs.haploid/"
+    shell:
+        "%s haploid {params.working_dir} {input.bam} {input.genome}" % (config["tools"]["svim-asm"])
+
+rule svim_call_bacs:
+    input:
+        bam =  "regions/eval/bams/bacs.to.hg38.bam",
+        bai =  "regions/eval/bams/bacs.to.hg38.bam.bai",
+        genome = config["hg38"]
+    output:
+        "regions/svim/{name}/bacs.haploid/variants.vcf"
+    params:
+        working_dir = "regions/svim/{name}/bacs.haploid/"
+    shell:
+        "%s haploid {params.working_dir} {input.bam} {input.genome}" % (config["tools"]["svim-asm"])
+
+
