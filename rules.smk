@@ -1,13 +1,11 @@
 import networkx as nx
 import pandas as pd
 import numpy as np
-from collections import defaultdict
+import pysam
+from collections import defaultdict, Counter
 
 def get_samples(wildcards):
     return config["samples"][wildcards.sample]
-
-def get_regions(wildcards):
-    return config["regions"]["original"][wildcards.name]
 
 wildcard_constraints:
     region="\d+",
@@ -21,7 +19,7 @@ wildcard_constraints:
 
 rule fetch_segdup_sequences:
     input:
-        regions = config["regions"]["slop15k"],
+        regions = config["regions"]["original"]["sda"],
         reference = config["genome"]
     output:
         "regions/segdups/r{region}.fa"
@@ -38,13 +36,21 @@ rule map_segdup_sequences:
     shell:
         "minimap2 -ax asm10 -t {threads} --secondary=yes -N 100 -p 0.80 {input.reference} {input.fasta} | samtools view -b | samtools sort > {output}"
 
-rule bamtobed:
+rule bam_to_tsv:
     input:
         "regions/segdups/r{region}.bam"
     output:
         "regions/segdups/r{region}.tsv"
     shell:
         "bedtools bamtobed -i {input} | awk 'OFS=\"\\t\" {{ print {wildcards.region}, $0 }}' > {output}"
+
+rule faidx:
+    input:
+        "{name}.fa"
+    output:
+        "{name}.fa.fai"
+    shell:
+        "samtools faidx {input}"
 
 rule concat_regions:
     input:
@@ -341,6 +347,56 @@ rule polish_contigs:
             #Concat polished contigs
             shell("cat %s > {output.contigs}" % (" ".join([(params["wd"] + "consensus%d.fa" % (num)) for num in range(1, num_haps + 1)])))
 
+rule self_align_contigs:
+    input:
+        contigs = "regions/contigs/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.fa"
+    output:
+        bam = "regions/contigs/alignments.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/r{region}.bam"
+    threads: 4
+    shell:
+        "minimap2 -x asm20 -Y -a --eqx -t {threads} {input.contigs} {input.contigs} | samtools view -F 4 -u - | samtools sort - > {output.bam}"
+
+rule compute_identity_table:
+    input:
+        bam = "regions/contigs/alignments.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/r{region}.bam"
+    output:
+        tbl = "regions/contigs/alignments.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/r{region}.tbl"
+    shell:
+        "python3 %s/samIdentity.py --header {input.bam} | awk '$1 != $5' > {output.tbl}" % (config["tools"]["paftest"])
+
+rule separate_paralogues:
+    input:
+        tbl = "regions/contigs/alignments.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/r{region}.tbl",
+        contigs = "regions/contigs/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.fa"
+    output:
+        contigs = "regions/contigs/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.grouped.fa"
+    run:
+        fasta_file = pysam.FastaFile(input["contigs"])
+        contig_names = fasta_file.references
+        df = pd.read_csv(input["tbl"], sep="\t")
+        df["query_span"] = df["query_end"] - df["query_start"]
+        df["reference_span"] = df["reference_end"] - df["reference_start"]
+        similar_contigs = df.loc[(df["perID_by_all"] > 99) & (df["query_span"] / df["query_length"] > 0.5) & (df["reference_span"] / df["reference_length"] > 0.5), ["query_name", "reference_name"]]
+        G = nx.Graph()
+        G.add_nodes_from(contig_names)
+        for index, row in similar_contigs.iterrows():
+            G.add_edge(row["query_name"], row["reference_name"])
+        with open(output["contigs"], 'w') as fasta_output:
+            p_index = 0
+            for component in nx.connected_components(G):
+                p_index += 1
+                if len(component) <= 2:
+                    for c_index, contig in enumerate(component):
+                        print(">r%s_paralog%s_haplotype%s" % (wildcards["region"], p_index, c_index+1), file=fasta_output)
+                        print(fasta_file.fetch(reference = contig), file=fasta_output)
+                else:
+                    for c_index, contig in enumerate(component):
+                        #Every second contig goes into a separate paralog
+                        p_index2 = c_index // 2
+                        print(">r%s_paralog%s_haplotype%s" % (wildcards["region"], p_index + p_index2, (c_index % 2) + 1), file=fasta_output)
+                        print(fasta_file.fetch(reference = contig), file=fasta_output)
+                    p_index+=p_index2
+
 #############
 #Plot graphs#
 #############
@@ -367,15 +423,26 @@ rule plot_bandage_pruned:
 
 rule pool_contigs:
     input:
-        expand("regions/contigs/r{i}.t{{tip_max_size}}.b{{bubble_max_size}}.d{{degree_max_size}}.polished.fa", i=good_regions)
+        expand("regions/contigs/r{i}.t{{tip_max_size}}.b{{bubble_max_size}}.d{{degree_max_size}}.polished.grouped.fa", i=good_regions)
     output:
-        "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.fa"
+        "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.grouped.fa"
     shell:
         "cat {input} > {output}"
 
+rule split_to_diploid:
+    input:
+        fa = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.grouped.fa",
+        fai = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.grouped.fa.fai"
+    output:
+        h1 = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.haplotype1.fa",
+        h2 = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.haplotype2.fa"
+    run:
+        shell("samtools faidx -r <(cat {input.fai} | cut -f 1 | grep \"_haplotype1\") {input.fa} > {output.h1}")
+        shell("samtools faidx -r <(cat {input.fai} | cut -f 1 | grep \"_haplotype2\") {input.fa} > {output.h2}")
+
 rule map_contigs_to_assembly:
     input:
-        fa = "regions/contigs/pooled.{name}.polished.fa",
+        fa = "regions/contigs/pooled.{name}.polished.grouped.fa",
         ref = config["genome"]
     output:
         "regions/eval/{name}/bams/polished.to.assembly.bam"
@@ -386,7 +453,7 @@ rule map_contigs_to_assembly:
 
 rule map_contigs_to_bacs:
     input:
-        asm = "regions/contigs/pooled.{name}.polished.fa",
+        asm = "regions/contigs/pooled.{name}.polished.grouped.fa",
         bacs = config["bacs"]["fasta"]
     output:
         bam = "regions/eval/{name}/bams/polished.to.bacs.bam"
@@ -397,7 +464,7 @@ rule map_contigs_to_bacs:
 
 rule map_bacs_to_contigs:
     input:
-        asm = "regions/contigs/pooled.{name}.polished.fa",
+        asm = "regions/contigs/pooled.{name}.polished.grouped.fa",
         bacs = config["bacs"]["fasta"]
     output:
         bam = "regions/eval/{name}/bams/bacs.to.polished.bam"
@@ -416,13 +483,13 @@ rule index_bam:
 
 rule map_contigs_to_hg38:
     input:
-        asm = "regions/contigs/pooled.{name}.polished.fa",
+        asm = "regions/contigs/pooled.{name}.polished.grouped.fa",
         hg38 = config["hg38"]
     output:
         bam = "regions/eval/{name}/bams/polished.to.hg38.bam"
     threads: 10
     shell:"""
-minimap2 -t {threads} --secondary=no -a -Y -x asm20 \
+minimap2 -t {threads} --secondary=no -a --eqx -Y -x asm20 \
     -m 10000 -z 10000,50 -r 50000 --end-bonus=100 -O 5,56 -E 4,1 -B 5 \
      {input.hg38} {input.asm} | samtools view -F 260 -u - | samtools sort -@ {threads} - > {output.bam}
 """
@@ -441,7 +508,7 @@ rule map_bacs_to_assembly:
 rule map_bacs_to_hg38:
     input:
         hg38 = config["hg38"],
-        sd = config["bacs"]["segdups"], 
+        sd = config["segdups"], 
         bacs = config["bacs"]["fasta"],
     output:
         bam = "regions/eval/bams/bacs.to.hg38.bam",
@@ -461,36 +528,36 @@ bedtools intersect -a {output.bam} -b {input.sd} | samtools view - | awk '{{prin
 
 rule quast_to_assembly:
     input:
-        fa = "regions/contigs/pooled.{name}.polished.fa",
+        fa = "regions/contigs/pooled.{name}.polished.{variant}.fa",
         ref = config["genome"]
     output:
-        "regions/eval/{name}/quast_to_assembly/report.html"
+        "regions/eval/{name}/quast_to_assembly/{variant}/report.html"
     params:
-        wd = "regions/eval/{name}/quast_to_assembly"
+        wd = "regions/eval/{name}/quast_to_assembly/{variant}"
     shell:
-        "%s --fragmented --no-icarus -o {params.wd} -r {input.ref} {input.fa}" % (config["tools"]["quast"])
+        "%s --fragmented --min-contig 20000 --min-alignment 5000 --min-identity 95.0 --unaligned-part-size 2000 --no-icarus -o {params.wd} -r {input.ref} {input.fa}" % (config["tools"]["quast"])
 
 rule quast_to_bacs:
     input:
-        fa = "regions/contigs/pooled.{name}.polished.fa",
+        fa = "regions/contigs/pooled.{name}.polished.{variant}.fa",
         ref = config["bacs"]["fasta"]
     output:
-        "regions/eval/{name}/quast_to_bacs/report.html"
+        "regions/eval/{name}/quast_to_bacs/{variant}/report.html"
     params:
-        wd = "regions/eval/{name}/quast_to_bacs"
+        wd = "regions/eval/{name}/quast_to_bacs/{variant}"
     shell:
-        "%s --fragmented --no-icarus -o {params.wd} -r {input.ref} {input.fa}" % (config["tools"]["quast"])
+        "%s --fragmented --min-contig 20000 --min-alignment 5000 --min-identity 98.0 --unaligned-part-size 2000 --no-icarus -o {params.wd} -r {input.ref} {input.fa}" % (config["tools"]["quast"])
 
 rule quast_to_hg38:
     input:
-        fa = "regions/contigs/pooled.{name}.polished.fa",
+        fa = "regions/contigs/pooled.{name}.polished.{variant}.fa",
         ref = config["hg38"]
     output:
-        "regions/eval/{name}/quast_to_hg38/report.html"
+        "regions/eval/{name}/quast_to_hg38/{variant}/report.html"
     params:
-        wd = "regions/eval/{name}/quast_to_hg38"
+        wd = "regions/eval/{name}/quast_to_hg38/{variant}"
     shell:
-        "%s --fragmented --no-icarus -o {params.wd} -r {input.ref} {input.fa}" % (config["tools"]["quast"])
+        "%s --fragmented --min-contig 20000 --min-alignment 5000 --min-identity 95.0 --unaligned-part-size 2000 --no-icarus -o {params.wd} -r {input.ref} {input.fa}" % (config["tools"]["quast"])
 
 rule bam_to_bed:
     input:
@@ -503,16 +570,64 @@ rule bam_to_bed:
 rule count_resolved_segdup_regions_assembly:
     input:
         bed = "regions/eval/{name}/bams/polished.to.assembly.bed",
-        regions = get_regions,
+        regions = config["regions"]["original"]["sda"],
         index = config["genome"] + ".fai"
     output:
         inter = "regions/eval/{name}/resolved/inter.bed",
-        rbed = "regions/eval/{name}/resolved/SD.resolved.bed",
-        ubed = "regions/eval/{name}/resolved/SD.unresolved.bed",
-        sd_bed = "regions/eval/{name}/resolved/SD.status.tbl"
-    shell:
-        "bedtools intersect -a {input.bed} -b {input.regions} -wa -wb > {output.inter} && %s/PrintResolvedSegdups.py {output.inter} {input.regions} {input.index}\
-        --extra 10000 --resolved {output.rbed} --unresolved {output.ubed} --allseg {output.sd_bed}" % (config["tools"]["paftest"])
+        stats = "regions/eval/{name}/resolved/stats.txt",
+        status_list = "regions/eval/{name}/resolved/list.tbl"
+    params:
+        min_mapq = 30,
+        extra = 0
+    run:
+        shell("bedtools intersect -a {input.bed} -b {input.regions} -wa -wb > {output.inter}")
+        #Read segdup regions
+        with open(input["regions"]) as segdupFile:
+            segdupLines = segdupFile.readlines()
+        segdups = {}
+        for line in segdupLines:
+            vals = line.split()[0:3]
+            start = int(vals[1]) 
+            end = int(vals[2])
+            segdups["_".join(vals[0:3])] = []
+        #Read fasta index
+        contig_lengths = dict()
+        with open(input["index"], 'r') as fai_file:
+            for line in fai_file:
+                fields = line.strip().split()
+                contig_lengths[fields[0]] = int(fields[1])
+        with open(output["inter"]) as tabFile:
+            for line in tabFile:
+                vals = line.split()
+                mapq = int(vals[4])
+                if (mapq < params["min_mapq"]):
+                    continue
+                (ctgChrom, ctgStart, ctgEnd, ctgName) = (vals[0], int(vals[1]), int(vals[2]), vals[3])
+                (segChrom, segStart, segEnd) = (vals[5], int(vals[6]), int(vals[7]))
+                pref = segStart - ctgStart
+                suff = ctgEnd - segEnd
+                segdup = "_".join(vals[5:8])
+                segdups[segdup].append((pref, suff, ctgStart < 10, contig_lengths[ctgChrom] - ctgEnd < 10))
+        counter = Counter()
+        stats = open(output["stats"], 'w')
+        status_list = open(output["status_list"], 'w')
+        for line in segdupLines:
+            vals = line.split()
+            segdup = "_".join(vals[0:3])
+            resolving_contigs = 0
+            for pref, suff, atStart, atEnd in segdups[segdup]:
+                if (atStart or pref > params["extra"]) and (atEnd or suff > params["extra"]):
+                    resolving_contigs += 1
+            counter[resolving_contigs] += 1
+            # write all entries
+            vals.append( "|".join(["%d,%d" % (pref, suff) for pref, suff, atStart, atEnd in segdups[segdup]]))
+            line = "\t".join(vals)
+            print(line, file=status_list)
+        for i in range(max(counter.keys()) + 1):
+            print("%d: %d" % (i, counter[i]), file=stats)
+        print("Total: %d" % (sum(counter.values())), file=stats)
+        stats.close()
+        status_list.close()
 
 ruleorder: count_resolved_segdup_regions_assembly > bam_to_bed
 
@@ -522,17 +637,32 @@ rule bacs_to_contigs_tbl:
         bam = "regions/eval/{name}/bams/bacs.to.polished.bam",
         names = "regions/eval/bams/bacs.in.sd.names"
     output:
-        tbl = "regions/eval/{name}/bacs/bacs.to.polished.tbl"
+        tbl = "regions/eval/{name}/tables/bacs.to.polished.tbl"
     shell:
         "python3 %s/samIdentity.py --header --mask {input.names} {input.bam} > {output.tbl}" % (config["tools"]["paftest"])
 
+rule contigs_to_hg38_tbl:
+    input:
+        bam = "regions/eval/{name}/bams/polished.to.hg38.bam"
+    output:
+        tbl = "regions/eval/{name}/tables/polished.to.hg38.tbl"
+    shell:
+        "python3 %s/samIdentity.py --header <(samtools view -h -F 2308 {input.bam}) > {output.tbl}" % (config["tools"]["paftest"])
+
+rule contigs_to_bacs_tbl:
+    input:
+        bam = "regions/eval/{name}/bams/polished.to.bacs.bam"
+    output:
+        tbl = "regions/eval/{name}/tables/polished.to.bacs.tbl"
+    shell:
+        "python3 %s/samIdentity.py --header {input.bam} > {output.tbl}" % (config["tools"]["paftest"])
+
 rule make_qv_sum:
     input:
-        bac_tbl = "regions/eval/{name}/bacs/bacs.to.polished.tbl"
+        bac_tbl = "regions/eval/{name}/tables/bacs.to.polished.tbl"
     output:
-        qv_sum = "regions/eval/{name}/bacs/qv_sum.txt"
+        qv_sum = "regions/eval/{name}/tables/qv_sum.txt"
     run:
-        pd.options.mode.use_inf_as_na = True
         out = ""
         sys.stderr.write(input["bac_tbl"] + "\n")
         df = pd.read_csv(input["bac_tbl"], sep="\t")
@@ -542,11 +672,26 @@ rule make_qv_sum:
         df["qv_matches"] = -10 * np.log10( val_matches )
         for mask in [True, False]:
             tmp = df[df["mask"] == mask]
-            perfect = tmp["qv_all"].isna()
-            out += "Segdup BACs? = {}\nPercent identity of all\nPerfect\t{}\n{}\n\n".format(mask, sum(perfect), tmp.qv_all.describe()   )
-            perfect = tmp["qv_matches"].isna()
-            out += "Segdup BACs? = {}\nPercent identity of matches only\nPerfect\t{}\n{}\n\n".format(mask, sum(perfect), tmp.qv_matches.describe()   )
+            mean_all = tmp["perID_by_all"].mean()
+            mean_all_qv = -10 * np.log10(1 - mean_all/100)
+            mean_matches = tmp["perID_by_matches"].mean()
+            mean_matches_qv = -10 * np.log10(1 - mean_matches/100)
+            out += "Segdup BACs? = {}\nPercent identity of all\n\tMean identity\tMean QV\nAll\t{}\t{}\nMatches\t{}\t{}\n\n".format(mask, mean_all, mean_all_qv, mean_matches, mean_matches_qv)
         open(output["qv_sum"], "w+").write(out)
+
+rule count_misassemblies:
+    input:
+        bac_tbl = "regions/eval/{name}/tables/bacs.to.polished.tbl"
+    output:
+        confirmed = "regions/eval/{name}/misassemblies/confirmed.txt",
+        misassembled = "regions/eval/{name}/misassemblies/misassembled.txt",
+        unclear = "regions/eval/{name}/misassemblies/unclear.txt"
+    params:
+        threshold = 5000
+    run:
+        shell("awk -v t=\"{params.threshold}\" '{{ if (($6 < t) && (($8-$7) < t)) {{ print $5 }} }}' {input.bac_tbl} | uniq | sort -k 1,1 > {output.confirmed}")
+        shell("join -t$'\\t' -v 1 -1 5 -2 1 <(tail -n+2 {input.bac_tbl} | sort -k 5,5) {output.confirmed} | awk -v t=\"{params.threshold}\" '{{ if (($3>t && $6>t) || ($5-$4>t && $8-$7>t)) {{ print $1 }} }}' | uniq > {output.misassembled}")
+        shell("join -t$'\\t' -v 1 -1 5 -2 1 <(tail -n+2 {input.bac_tbl} | sort -k 5,5) <(cat {output.confirmed} {output.misassembled} | sort -k1,1) | cut -f 1 | uniq > {output.unclear}")
 
 #########
 #SV Call#

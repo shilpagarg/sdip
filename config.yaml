@@ -25,4 +25,5 @@ tools:
 
 bacs:
     fasta: .../bacs.fa
-    segdups: .../ucsc.merged.10k.slop.segdups.bed
+
+segdups: .../ucsc.merged.10k.slop.segdups.bed
