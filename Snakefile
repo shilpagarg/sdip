@@ -18,7 +18,9 @@ big_regions = [17, 32, 96, 101, 102, 108, 162, 166, 216, 217, 218, 267, 268, 275
 cycle_regions = [136, 187, 188, 189, 21, 227, 266, 269, 276, 333, 334, 34, 347, 361, 388, 423, 435, 440, 476, 488, 491, 500]
 #Range of duplicate regions: should be initially empty, later insert regions that are contained by other regions (use find_redundant_segdup_regions.sh)
 duplicate_regions = []
-good_regions = [r for r in filtered_segdup_regions if (not r in big_regions) and (not r in cycle_regions) and (not r in duplicate_regions)]
+# Range of regions that produce empty contigs
+empty_contigs = [152, 285, 448]
+good_regions = [r for r in filtered_segdup_regions if (not r in big_regions) and (not r in cycle_regions) and (not r in duplicate_regions) and (not r in empty_contigs)]
 
 #include rules file from local clone of WHdenovo
 include: "/lustre/scratch115/realdata/mdt3/projects/graphs/yeast/erik/final_exp/segdup/david/WHdenovo/paftest/rules.smk"
@@ -32,19 +34,22 @@ rule all:
                                                                                                      bubble_max_size=[5],
                                                                                                      degree_max_size=[2]),
         "regions/stats/stats.t5.b5.d2.txt",
-        "regions/eval/t5.b5.d2/bams/polished.to.bacs.bam",
-        "regions/eval/t5.b5.d2/quast_to_assembly/report.html",
-        "regions/eval/t5.b5.d2/quast_to_bacs/report.html",
-        "regions/eval/t5.b5.d2/quast_to_hg38/report.html",
+        expand("regions/eval/t5.b5.d2/quast_to_bacs/{variant}/report.html", variant=["grouped", "haplotype1", "haplotype2"]),
+        expand("regions/eval/t5.b5.d2/quast_to_hg38/{variant}/report.html", variant=["grouped", "haplotype1", "haplotype2"]),
         "regions/eval/t5.b5.d2/resolved/inter.bed",
-        "regions/eval/t5.b5.d2/bacs/qv_sum.txt",
+        "regions/eval/t5.b5.d2/misassemblies/confirmed.txt",
+        "regions/eval/t5.b5.d2/tables/qv_sum.txt",
+        "regions/eval/t5.b5.d2/tables/polished.to.hg38.tbl",
+        "regions/eval/t5.b5.d2/tables/polished.to.bacs.tbl",
         "regions/svim/t5.b5.d2/contigs.haploid/variants.vcf",
         "regions/svim/t5.b5.d2/bacs.haploid/variants.vcf",
 
-        "regions/eval/sda/quast_to_assembly/report.html",
-        "regions/eval/sda/quast_to_bacs/report.html",
-        "regions/eval/sda/quast_to_hg38/report.html",
+        "regions/eval/sda/quast_to_bacs/grouped/report.html",
+        "regions/eval/sda/quast_to_hg38/grouped/report.html",
         "regions/eval/sda/resolved/inter.bed",
-        "regions/eval/sda/bacs/qv_sum.txt",
+        "regions/eval/sda/misassemblies/confirmed.txt",
+        "regions/eval/sda/tables/qv_sum.txt",
+        "regions/eval/sda/tables/polished.to.hg38.tbl",
+        "regions/eval/sda/tables/polished.to.bacs.tbl",
         "regions/svim/sda/contigs.haploid/variants.vcf",
         "regions/svim/sda/bacs.haploid/variants.vcf"

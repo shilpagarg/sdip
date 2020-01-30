@@ -22,7 +22,7 @@ print("Modules Loaded", file=sys.stderr)
 
 def makeHeader():
 	rtn = ["query_name", "query_start", "query_end", "query_length",
-			"reference_name", "reference_start", "reference_end",
+			"reference_name", "reference_start", "reference_end", "reference_length",
 			"perID_by_matches", "perID_by_events", "perID_by_all", 
 			"matches", "mismatches", 
 			"insertions", "deletions", "insertion_events", "deletion_events"]
@@ -46,7 +46,7 @@ def perId(matches, mismatch, ins, dele, insEvent, delEvent):
 # *at indicates reference base a is substituted with a query base t.
 # It is similar to the MD SAM tag but is standalone and easier to parse.
 
-def formatRead(read):
+def formatRead(read, ref_length):
 	
 	if(read.flag == 4):
 		return(None)
@@ -92,7 +92,7 @@ def formatRead(read):
 	bymatches, byevents, byall = perId(matches, mismatch, ins, dele, insEvent, delEvent)
 
 	rtn = [read.query_name, read.query_alignment_start, read.query_alignment_end, read.infer_query_length(),
-			read.reference_name, read.reference_start, read.reference_end,
+			read.reference_name, read.reference_start, read.reference_end, ref_length,
 			bymatches, byevents, byall,
 			matches, mismatch, ins, dele, insEvent, delEvent
 			]
@@ -105,7 +105,8 @@ def formatRead(read):
 out = []
 samfile = pysam.AlignmentFile(args.samfile)
 for read in samfile.fetch(until_eof=True):
-	add = formatRead(read)
+	ref_length = samfile.get_reference_length(read.reference_name)
+	add = formatRead(read, ref_length)
 	if(add is not None):
 		out.append(add)
 
