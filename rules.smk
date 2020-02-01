@@ -364,38 +364,27 @@ rule compute_identity_table:
     shell:
         "python3 %s/samIdentity.py --header {input.bam} | awk '$1 != $5' > {output.tbl}" % (config["tools"]["paftest"])
 
-rule separate_paralogues:
+rule separate_paralogs:
     input:
         tbl = "regions/contigs/alignments.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/r{region}.tbl",
         contigs = "regions/contigs/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.fa"
     output:
-        contigs = "regions/contigs/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.grouped.fa"
-    run:
-        fasta_file = pysam.FastaFile(input["contigs"])
-        contig_names = fasta_file.references
-        df = pd.read_csv(input["tbl"], sep="\t")
-        df["query_span"] = df["query_end"] - df["query_start"]
-        df["reference_span"] = df["reference_end"] - df["reference_start"]
-        similar_contigs = df.loc[(df["perID_by_all"] > 99) & (df["query_span"] / df["query_length"] > 0.5) & (df["reference_span"] / df["reference_length"] > 0.5), ["query_name", "reference_name"]]
-        G = nx.Graph()
-        G.add_nodes_from(contig_names)
-        for index, row in similar_contigs.iterrows():
-            G.add_edge(row["query_name"], row["reference_name"])
-        with open(output["contigs"], 'w') as fasta_output:
-            p_index = 0
-            for component in nx.connected_components(G):
-                p_index += 1
-                if len(component) <= 2:
-                    for c_index, contig in enumerate(component):
-                        print(">r%s_paralog%s_haplotype%s" % (wildcards["region"], p_index, c_index+1), file=fasta_output)
-                        print(fasta_file.fetch(reference = contig), file=fasta_output)
-                else:
-                    for c_index, contig in enumerate(component):
-                        #Every second contig goes into a separate paralog
-                        p_index2 = c_index // 2
-                        print(">r%s_paralog%s_haplotype%s" % (wildcards["region"], p_index + p_index2, (c_index % 2) + 1), file=fasta_output)
-                        print(fasta_file.fetch(reference = contig), file=fasta_output)
-                    p_index+=p_index2
+        contigs = "regions/contigs/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.diploid.fa"
+    log:
+        "regions/logs/merge_haplotypes/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.log"
+    shell:
+        "python3 %s/merge_haplotypes.py {input.contigs} {input.tbl} {wildcards.region} 2> {log} > {output.contigs}" % (config["tools"]["paftest"])
+
+rule remove_duplicates_haploid:
+    input:
+        tbl = "regions/contigs/alignments.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/r{region}.tbl",
+        contigs = "regions/contigs/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.fa"
+    output:
+        contigs = "regions/contigs/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.haploid.fa"
+    log:
+        "regions/logs/merge_haplotypes/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.log"
+    shell:
+        "python3 %s/merge_haplotypes.py {input.contigs} {input.tbl} {wildcards.region} 2> {log} > {output.contigs}" % (config["tools"]["paftest"])
 
 #############
 #Plot graphs#
@@ -421,11 +410,20 @@ rule plot_bandage_pruned:
 #Map contigs#
 #############
 
-rule pool_contigs:
+
+rule pool_contigs_diploid:
     input:
-        expand("regions/contigs/r{i}.t{{tip_max_size}}.b{{bubble_max_size}}.d{{degree_max_size}}.polished.grouped.fa", i=good_regions)
+        expand("regions/contigs/r{i}.t{{tip_max_size}}.b{{bubble_max_size}}.d{{degree_max_size}}.polished.diploid.fa", i=good_regions)
     output:
         "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.grouped.fa"
+    shell:
+        "cat {input} > {output}"
+
+rule pool_contigs_haploid:
+    input:
+        expand("regions/contigs/r{i}.t{{tip_max_size}}.b{{bubble_max_size}}.d{{degree_max_size}}.polished.haploid.fa", i=good_regions)
+    output:
+        "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.haploid.fa"
     shell:
         "cat {input} > {output}"
 
@@ -434,18 +432,30 @@ rule split_to_diploid:
         fa = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.grouped.fa",
         fai = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.grouped.fa.fai"
     output:
+        h0 = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.haplotype0.fa",
         h1 = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.haplotype1.fa",
         h2 = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.haplotype2.fa"
     run:
+        shell("samtools faidx -r <(cat {input.fai} | cut -f 1 | grep \"_haplotype0\") {input.fa} > {output.h0}")
         shell("samtools faidx -r <(cat {input.fai} | cut -f 1 | grep \"_haplotype1\") {input.fa} > {output.h1}")
         shell("samtools faidx -r <(cat {input.fai} | cut -f 1 | grep \"_haplotype2\") {input.fa} > {output.h2}")
 
+rule filter_haplotype0:
+    input:
+        fa = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.grouped.fa",
+        fai = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.grouped.fa.fai"
+    output:
+        fa = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.diploid.fa",
+    run:
+        shell("samtools faidx -r <(cat {input.fai} | cut -f 1 | grep -v \"_haplotype0\") {input.fa} > {output.fa}")
+
+
 rule map_contigs_to_assembly:
     input:
-        fa = "regions/contigs/pooled.{name}.polished.grouped.fa",
+        fa = "regions/contigs/pooled.{parameters}.polished.{ploidy}.fa",
         ref = config["genome"]
     output:
-        "regions/eval/{name}/bams/polished.to.assembly.bam"
+        "regions/eval/{parameters}/bams/polished.{ploidy}.to.assembly.bam"
     threads: 10
     shell:
         "minimap2 -t {threads} --secondary=no -a --eqx -Y -x asm20 -m 10000 -z 10000,50 -r 50000 --end-bonus=100 -O 5,56 -E 4,1 -B 5 \
@@ -453,10 +463,10 @@ rule map_contigs_to_assembly:
 
 rule map_contigs_to_bacs:
     input:
-        asm = "regions/contigs/pooled.{name}.polished.grouped.fa",
+        asm = "regions/contigs/pooled.{parameters}.polished.{ploidy}.fa",
         bacs = config["bacs"]["fasta"]
     output:
-        bam = "regions/eval/{name}/bams/polished.to.bacs.bam"
+        bam = "regions/eval/{parameters}/bams/polished.{ploidy}.to.bacs.bam"
     threads: 10
     shell:
         "minimap2 -I 8G -t {threads} --secondary=no -a --eqx -Y -x asm20 \
@@ -464,10 +474,10 @@ rule map_contigs_to_bacs:
 
 rule map_bacs_to_contigs:
     input:
-        asm = "regions/contigs/pooled.{name}.polished.grouped.fa",
+        asm = "regions/contigs/pooled.{parameters}.polished.{ploidy}.fa",
         bacs = config["bacs"]["fasta"]
     output:
-        bam = "regions/eval/{name}/bams/bacs.to.polished.bam"
+        bam = "regions/eval/{parameters}/bams/bacs.to.polished.{ploidy}.bam"
     threads: 10
     shell:
         "minimap2 -I 8G -t {threads} --secondary=no -a --eqx -Y -x asm20 -m 10000 -z 10000,50 -r 50000 --end-bonus=100 -O 5,56 -E 4,1 -B 5 \
@@ -483,10 +493,10 @@ rule index_bam:
 
 rule map_contigs_to_hg38:
     input:
-        asm = "regions/contigs/pooled.{name}.polished.grouped.fa",
+        asm = "regions/contigs/pooled.{parameters}.polished.{ploidy}.fa",
         hg38 = config["hg38"]
     output:
-        bam = "regions/eval/{name}/bams/polished.to.hg38.bam"
+        bam = "regions/eval/{parameters}/bams/polished.{ploidy}.to.hg38.bam"
     threads: 10
     shell:"""
 minimap2 -t {threads} --secondary=no -a --eqx -Y -x asm20 \
@@ -528,34 +538,34 @@ bedtools intersect -a {output.bam} -b {input.sd} | samtools view - | awk '{{prin
 
 rule quast_to_assembly:
     input:
-        fa = "regions/contigs/pooled.{name}.polished.{variant}.fa",
+        fa = "regions/contigs/pooled.{parameters}.polished.{ploidy}.fa",
         ref = config["genome"]
     output:
-        "regions/eval/{name}/quast_to_assembly/{variant}/report.html"
+        "regions/eval/{parameters}/quast_to_assembly/{ploidy}/report.html"
     params:
-        wd = "regions/eval/{name}/quast_to_assembly/{variant}"
+        wd = "regions/eval/{parameters}/quast_to_assembly/{ploidy}"
     shell:
         "%s --fragmented --min-contig 20000 --min-alignment 5000 --min-identity 95.0 --unaligned-part-size 2000 --no-icarus -o {params.wd} -r {input.ref} {input.fa}" % (config["tools"]["quast"])
 
 rule quast_to_bacs:
     input:
-        fa = "regions/contigs/pooled.{name}.polished.{variant}.fa",
+        fa = "regions/contigs/pooled.{parameters}.polished.{ploidy}.fa",
         ref = config["bacs"]["fasta"]
     output:
-        "regions/eval/{name}/quast_to_bacs/{variant}/report.html"
+        "regions/eval/{parameters}/quast_to_bacs/{ploidy}/report.html"
     params:
-        wd = "regions/eval/{name}/quast_to_bacs/{variant}"
+        wd = "regions/eval/{parameters}/quast_to_bacs/{ploidy}"
     shell:
         "%s --fragmented --min-contig 20000 --min-alignment 5000 --min-identity 98.0 --unaligned-part-size 2000 --no-icarus -o {params.wd} -r {input.ref} {input.fa}" % (config["tools"]["quast"])
 
 rule quast_to_hg38:
     input:
-        fa = "regions/contigs/pooled.{name}.polished.{variant}.fa",
+        fa = "regions/contigs/pooled.{parameters}.polished.{ploidy}.fa",
         ref = config["hg38"]
     output:
-        "regions/eval/{name}/quast_to_hg38/{variant}/report.html"
+        "regions/eval/{parameters}/quast_to_hg38/{ploidy}/report.html"
     params:
-        wd = "regions/eval/{name}/quast_to_hg38/{variant}"
+        wd = "regions/eval/{parameters}/quast_to_hg38/{ploidy}"
     shell:
         "%s --fragmented --min-contig 20000 --min-alignment 5000 --min-identity 95.0 --unaligned-part-size 2000 --no-icarus -o {params.wd} -r {input.ref} {input.fa}" % (config["tools"]["quast"])
 
@@ -569,13 +579,13 @@ rule bam_to_bed:
 
 rule count_resolved_segdup_regions_assembly:
     input:
-        bed = "regions/eval/{name}/bams/polished.to.assembly.bed",
+        bed = "regions/eval/{parameters}/bams/polished.{ploidy}.to.assembly.bed",
         regions = config["regions"]["original"]["sda"],
         index = config["genome"] + ".fai"
     output:
-        inter = "regions/eval/{name}/resolved/inter.bed",
-        stats = "regions/eval/{name}/resolved/stats.txt",
-        status_list = "regions/eval/{name}/resolved/list.tbl"
+        inter = "regions/eval/{parameters}/resolved.{ploidy}/inter.bed",
+        stats = "regions/eval/{parameters}/resolved.{ploidy}/stats.txt",
+        status_list = "regions/eval/{parameters}/resolved.{ploidy}/list.tbl"
     params:
         min_mapq = 30,
         extra = 0
@@ -634,35 +644,36 @@ ruleorder: count_resolved_segdup_regions_assembly > bam_to_bed
 
 rule bacs_to_contigs_tbl:
     input:
-        bam = "regions/eval/{name}/bams/bacs.to.polished.bam",
+        bam = "regions/eval/{parameters}/bams/bacs.to.polished.{ploidy}.bam",
         names = "regions/eval/bams/bacs.in.sd.names"
     output:
-        tbl = "regions/eval/{name}/tables/bacs.to.polished.tbl"
+        tbl = "regions/eval/{parameters}/tables/bacs.to.polished.{ploidy}.tbl"
     shell:
         "python3 %s/samIdentity.py --header --mask {input.names} {input.bam} > {output.tbl}" % (config["tools"]["paftest"])
 
 rule contigs_to_hg38_tbl:
     input:
-        bam = "regions/eval/{name}/bams/polished.to.hg38.bam"
+        bam = "regions/eval/{parameters}/bams/polished.{ploidy}.to.hg38.bam"
     output:
-        tbl = "regions/eval/{name}/tables/polished.to.hg38.tbl"
+        tbl = "regions/eval/{parameters}/tables/polished.{ploidy}.to.hg38.tbl"
     shell:
         "python3 %s/samIdentity.py --header <(samtools view -h -F 2308 {input.bam}) > {output.tbl}" % (config["tools"]["paftest"])
 
 rule contigs_to_bacs_tbl:
     input:
-        bam = "regions/eval/{name}/bams/polished.to.bacs.bam"
+        bam = "regions/eval/{parameters}/bams/polished.{ploidy}.to.bacs.bam"
     output:
-        tbl = "regions/eval/{name}/tables/polished.to.bacs.tbl"
+        tbl = "regions/eval/{parameters}/tables/polished.{ploidy}.to.bacs.tbl"
     shell:
         "python3 %s/samIdentity.py --header {input.bam} > {output.tbl}" % (config["tools"]["paftest"])
 
 rule make_qv_sum:
     input:
-        bac_tbl = "regions/eval/{name}/tables/bacs.to.polished.tbl"
+        bac_tbl = "regions/eval/{parameters}/tables/bacs.to.polished.{ploidy}.tbl"
     output:
-        qv_sum = "regions/eval/{name}/tables/qv_sum.txt"
+        qv_sum = "regions/eval/{parameters}/tables/qv_sum.{ploidy}.txt"
     run:
+        pd.options.mode.use_inf_as_na = True
         out = ""
         sys.stderr.write(input["bac_tbl"] + "\n")
         df = pd.read_csv(input["bac_tbl"], sep="\t")
@@ -676,16 +687,23 @@ rule make_qv_sum:
             mean_all_qv = -10 * np.log10(1 - mean_all/100)
             mean_matches = tmp["perID_by_matches"].mean()
             mean_matches_qv = -10 * np.log10(1 - mean_matches/100)
-            out += "Segdup BACs? = {}\nPercent identity of all\n\tMean identity\tMean QV\nAll\t{}\t{}\nMatches\t{}\t{}\n\n".format(mask, mean_all, mean_all_qv, mean_matches, mean_matches_qv)
+            perfect_all = tmp["qv_all"].isna()
+            perfect_matches = tmp["qv_matches"].isna()
+            out += "Segdup BACs? = {}\n".format(mask)
+            out += "\tMean identity\tQV of mean identity\n"
+            out += "All\t{}\t{}\n".format(mean_all, mean_all_qv)
+            out += "Matches\t{}\t{}\n\n".format(mean_matches, mean_matches_qv)
+            out += "All (SDA method)\nPerfect\t{}\n{}\n\n".format(sum(perfect_all), tmp.qv_all.describe())            
+            out += "Matches (SDA method)\nPerfect\t{}\n{}\n\n".format(sum(perfect_matches), tmp.qv_matches.describe())            
         open(output["qv_sum"], "w+").write(out)
 
 rule count_misassemblies:
     input:
-        bac_tbl = "regions/eval/{name}/tables/bacs.to.polished.tbl"
+        bac_tbl = "regions/eval/{parameters}/tables/bacs.to.polished.{ploidy}.tbl"
     output:
-        confirmed = "regions/eval/{name}/misassemblies/confirmed.txt",
-        misassembled = "regions/eval/{name}/misassemblies/misassembled.txt",
-        unclear = "regions/eval/{name}/misassemblies/unclear.txt"
+        confirmed = "regions/eval/{parameters}/misassemblies.{ploidy}/confirmed.txt",
+        misassembled = "regions/eval/{parameters}/misassemblies.{ploidy}/misassembled.txt",
+        unclear = "regions/eval/{parameters}/misassemblies.{ploidy}/unclear.txt"
     params:
         threshold = 5000
     run:
@@ -699,13 +717,13 @@ rule count_misassemblies:
 
 rule svim_call_contigs:
     input:
-        bam =  "regions/eval/{name}/bams/polished.to.hg38.bam",
-        bai =  "regions/eval/{name}/bams/polished.to.hg38.bam.bai",
+        bam =  "regions/eval/{parameters}/bams/polished.{ploidy}.to.hg38.bam",
+        bai =  "regions/eval/{parameters}/bams/polished.{ploidy}.to.hg38.bam.bai",
         genome = config["hg38"]
     output:
-        "regions/svim/{name}/contigs.haploid/variants.vcf"
+        "regions/svim/{parameters}/contigs.haploid/variants.vcf"
     params:
-        working_dir = "regions/svim/{name}/contigs.haploid/"
+        working_dir = "regions/svim/{parameters}/contigs.haploid/"
     shell:
         "%s haploid {params.working_dir} {input.bam} {input.genome}" % (config["tools"]["svim-asm"])
 
@@ -715,9 +733,9 @@ rule svim_call_bacs:
         bai =  "regions/eval/bams/bacs.to.hg38.bam.bai",
         genome = config["hg38"]
     output:
-        "regions/svim/{name}/bacs.haploid/variants.vcf"
+        "regions/svim/{parameters}/bacs.haploid/variants.vcf"
     params:
-        working_dir = "regions/svim/{name}/bacs.haploid/"
+        working_dir = "regions/svim/{parameters}/bacs.haploid/"
     shell:
         "%s haploid {params.working_dir} {input.bam} {input.genome}" % (config["tools"]["svim-asm"])
 
