@@ -50,6 +50,8 @@ def detect_bubble(graph, s):
 	return None
 
 def get_paths_in_bubble(graph, start, end):
+	if not (start[0] in graph.nodes and end[0] in graph.nodes):
+		return None
 	paths = []
 	S = [[start]]
 	while len(S) > 0:
@@ -59,12 +61,16 @@ def get_paths_in_bubble(graph, start, end):
 			target = edge[0]
 			if target == end:
 				paths.append(path + [target])
+				if len(paths) > 1000:
+					return paths
 			else:
 				S.append(path + [target])
 	return paths
 
 
 def remove_bubble(graph, paths):
+	if paths == None:
+		return
 	sorted_paths = sorted([(len(p), p) for p in paths])
 	longest_path = sorted_paths[-1][1]
 	nodes_in_longest_path = [node for node, direction in longest_path]
@@ -75,11 +81,36 @@ def remove_bubble(graph, paths):
 	graph.remove_nonexistent_edges()
 
 
+def get_bubble_length(graph, bubble):
+	paths = get_paths_in_bubble(graph, bubble[0], bubble[1])
+	if paths == None:
+		return None
+	max_length = None
+	for path in paths:
+		length = 0
+		for index in range(1, len(path) - 1):
+			from_node = path[index-1]
+			to_node = path[index]
+			overlaps = [overlap for (topos, (overlap, tags)) in graph.edges[from_node] if topos == to_node]
+			assert len(overlaps) == 1
+			overlap = overlaps[0]
+			to_node_length = len(graph.nodes[to_node[0]].nodeseq)
+			#print(to_node_length, overlap)
+			length += len(graph.nodes[to_node[0]].nodeseq) - overlap
+		overlaps = [overlap for (topos, (overlap, tags)) in graph.edges[path[-2]] if topos == path[-1]]
+		assert len(overlaps) == 1
+		overlap = overlaps[0]
+		length -= overlap
+		if max_length == None or length > max_length:
+			max_length = length
+	return max_length
+
+
 def main():
 	parser = argparse.ArgumentParser()
 	parser.add_argument('gfa', nargs='?', type=argparse.FileType('r'), default=sys.stdin, help = 'input GFA graph file (default: stdin)')
 	parser.add_argument('action', choices=['list', 'remove'])
-	parser.add_argument('--max_size', type = int, default = -1, help = 'maximum bubble size (number of nodes between start and end), default: -1 = all bubbles')
+	parser.add_argument('--min_length', type = int, default = -1, help = 'filter out bubbles shorter than this length (length of longest path between start and end), default: -1 = filter all')
 	args = parser.parse_args()
 
 	ingraph = args.gfa
@@ -97,16 +128,19 @@ def main():
 		bubble = detect_bubble(graph, (n, False))
 		if bubble:
 			bubbles.append(bubble)
-	print("Found %d bubbles of size > %d" % (len([bubble for bubble in bubbles if bubble[2] <= args.max_size or args.max_size == -1]), args.max_size), file=sys.stderr)
+	print("Found %d bubbles of length < %d" % (len([bubble for bubble in bubbles if get_bubble_length(graph, bubble) < args.min_length or args.min_length == -1]), args.min_length), file=sys.stderr)
 
 	if args.action == "list":
 		for bubble in bubbles:
-			print("{0}\t{1}\t{2}\t{3}\t{4}".format(bubble[0][0], "+" if bubble[0][1] else "-", bubble[1][0], "+" if bubble[1][1] else "-", bubble[2]))
+			max_length = get_bubble_length(graph, bubble)
+			print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}".format(bubble[0][0], "+" if bubble[0][1] else "-", bubble[1][0], "+" if bubble[1][1] else "-", bubble[2], max_length))
 	elif args.action == "remove":
 		for bubble in bubbles:
-			if bubble[2] <= args.max_size or args.max_size == -1:
+			length = get_bubble_length(graph, bubble)
+			if args.min_length == -1 or (length != None and length < args.min_length):
 				paths = get_paths_in_bubble(graph, bubble[0], bubble[1])
 				remove_bubble(graph, paths)
+				print("Removed", bubble)
 		graph.write(sys.stdout)
 
 if __name__ == '__main__':
