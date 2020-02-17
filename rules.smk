@@ -170,15 +170,15 @@ rule prune_graph:
     input:
         gfa = "regions/gfas/r{region}.reducted.gfa"
     output:        
-        gfa = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.gfa"
+        gfa = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_min_length}.d{degree_max_size}.gfa"
     shell:
         """python3 %s/prune_tips.py {input.gfa} remove --max_size {wildcards.tip_max_size} | \
-           python3 %s/prune_ultrabubbles.py remove --max_size {wildcards.bubble_max_size} | \
+           python3 %s/prune_ultrabubbles.py remove --min_length {wildcards.bubble_min_length} | \
            python3 %s/prune_tips.py remove --max_size {wildcards.tip_max_size} | \
-           python3 %s/prune_ultrabubbles.py remove --max_size {wildcards.bubble_max_size} | \
+           python3 %s/prune_ultrabubbles.py remove --min_length {wildcards.bubble_min_length} | \
            python3 %s/prune_tips.py remove --max_size {wildcards.tip_max_size} | \
            python3 %s/prune_degree3.py --max_size {wildcards.degree_max_size} | \
-           python3 %s/prune_ultrabubbles.py remove --max_size {wildcards.bubble_max_size} | \
+           python3 %s/prune_ultrabubbles.py remove --min_length {wildcards.bubble_min_length} | \
            python3 %s/prune_tips.py remove --max_size {wildcards.tip_max_size} > {output.gfa}""" % (config["tools"]["paftest"], config["tools"]["paftest"],
                                                                                                     config["tools"]["paftest"], config["tools"]["paftest"],
                                                                                                     config["tools"]["paftest"], config["tools"]["paftest"],
