@@ -349,42 +349,42 @@ rule polish_contigs:
 
 rule self_align_contigs:
     input:
-        contigs = "regions/contigs/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.fa"
+        contigs = "regions/contigs/r{region}.{parameters}.polished.fa"
     output:
-        bam = "regions/contigs/alignments.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/r{region}.bam"
+        bam = "regions/contigs/alignments.{parameters}/r{region}.bam"
     threads: 4
     shell:
         "minimap2 -x asm20 -Y -a --eqx -t {threads} {input.contigs} {input.contigs} | samtools view -F 4 -u - | samtools sort - > {output.bam}"
 
 rule compute_identity_table:
     input:
-        bam = "regions/contigs/alignments.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/r{region}.bam"
+        bam = "regions/contigs/alignments.{parameters}/r{region}.bam"
     output:
-        tbl = "regions/contigs/alignments.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/r{region}.tbl"
+        tbl = "regions/contigs/alignments.{parameters}/r{region}.tbl"
     shell:
         "python3 %s/samIdentity.py --header {input.bam} | awk '$1 != $5' > {output.tbl}" % (config["tools"]["paftest"])
 
 rule separate_paralogs:
     input:
-        tbl = "regions/contigs/alignments.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/r{region}.tbl",
-        contigs = "regions/contigs/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.fa"
+        tbl = "regions/contigs/alignments.{parameters}/r{region}.tbl",
+        contigs = "regions/contigs/r{region}.{parameters}.polished.fa"
     output:
-        contigs = "regions/contigs/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.diploid.fa"
+        contigs = "regions/contigs/r{region}.{parameters}.polished.diploid.fa"
     log:
-        "regions/logs/merge_haplotypes/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.log"
+        "regions/logs/merge_haplotypes/r{region}.{parameters}.log"
     shell:
-        "python3 %s/merge_haplotypes.py {input.contigs} {input.tbl} {wildcards.region} 2> {log} > {output.contigs}" % (config["tools"]["paftest"])
+        "python3 %s/merge_haplotypes.py --max_similarity 99.95 {input.contigs} {input.tbl} {wildcards.region} 2> {log} > {output.contigs}" % (config["tools"]["paftest"])
 
 rule remove_duplicates_haploid:
     input:
-        tbl = "regions/contigs/alignments.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/r{region}.tbl",
-        contigs = "regions/contigs/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.fa"
+        tbl = "regions/contigs/alignments.{parameters}/r{region}.tbl",
+        contigs = "regions/contigs/r{region}.{parameters}.polished.fa"
     output:
-        contigs = "regions/contigs/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.haploid.fa"
+        contigs = "regions/contigs/r{region}.{parameters}.polished.haploid.fa"
     log:
-        "regions/logs/merge_haplotypes/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.log"
+        "regions/logs/merge_haplotypes/r{region}.{parameters}.log"
     shell:
-        "python3 %s/merge_haplotypes.py {input.contigs} {input.tbl} {wildcards.region} 2> {log} > {output.contigs}" % (config["tools"]["paftest"])
+        "python3 %s/merge_haplotypes.py --haploid --max_similarity 99.95 {input.contigs} {input.tbl} {wildcards.region} 2> {log} > {output.contigs}" % (config["tools"]["paftest"])
 
 #############
 #Plot graphs#
