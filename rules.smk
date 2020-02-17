@@ -721,17 +721,32 @@ rule count_misassemblies:
 #SV Call#
 #########
 
-rule svim_call_contigs:
+rule svim_call_diploid:
     input:
-        bam =  "regions/eval/{parameters}/bams/polished.{ploidy}.to.hg38.bam",
-        bai =  "regions/eval/{parameters}/bams/polished.{ploidy}.to.hg38.bam.bai",
+        bam1 =  "regions/eval/{parameters}/bams/polished.haplotype1.to.hg38.bam",
+        bam2 =  "regions/eval/{parameters}/bams/polished.haplotype2.to.hg38.bam",
+        bai1 =  "regions/eval/{parameters}/bams/polished.haplotype1.to.hg38.bam.bai",
+        bai2 =  "regions/eval/{parameters}/bams/polished.haplotype2.to.hg38.bam.bai",
+        genome = config["hg38"]
+    output:
+        "regions/svim/{parameters}/contigs.diploid/variants.vcf"
+    params:
+        working_dir = "regions/svim/{parameters}/contigs.diploid/"
+    shell:
+        "%s diploid {params.working_dir} {input.bam1} {input.bam2} {input.genome}" % (config["tools"]["svim-asm"])
+
+rule svim_call_haploid:
+    input:
+        bam =  "regions/eval/{parameters}/bams/polished.haploid.to.hg38.bam",
+        bai =  "regions/eval/{parameters}/bams/polished.haploid.to.hg38.bam.bai",
         genome = config["hg38"]
     output:
         "regions/svim/{parameters}/contigs.haploid/variants.vcf"
     params:
         working_dir = "regions/svim/{parameters}/contigs.haploid/"
     shell:
-        "%s haploid {params.working_dir} {input.bam} {input.genome}" % (config["tools"]["svim-asm"])
+        "%s haploid --min_mapq 0 {params.working_dir} {input.bam} {input.genome}" % (config["tools"]["svim-asm"])
+
 
 rule svim_call_bacs:
     input:
@@ -743,6 +758,21 @@ rule svim_call_bacs:
     params:
         working_dir = "regions/svim/{parameters}/bacs.haploid/"
     shell:
-        "%s haploid {params.working_dir} {input.bam} {input.genome}" % (config["tools"]["svim-asm"])
+        "%s haploid --min_mapq 0 {params.working_dir} {input.bam} {input.genome}" % (config["tools"]["svim-asm"])
 
+rule normalize_calls:
+    input:
+        "{name}.vcf"
+    output:
+        "{name}.norm.vcf"
+    shell:
+        "bcftools norm -d all {input} > {output}"
 
+rule compress_calls:
+    input:
+        "{name}.vcf"
+    output:
+        gz = "{name}.vcf.gz",
+        tbi = "{name}.vcf.gz.tbi"
+    shell:
+        "bgzip -c {input} > {output.gz} && tabix -p vcf {output.gz}"
