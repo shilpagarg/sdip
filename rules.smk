@@ -585,7 +585,8 @@ rule count_resolved_segdup_regions_assembly:
     output:
         inter = "regions/eval/{parameters}/resolved.{ploidy}/inter.bed",
         stats = "regions/eval/{parameters}/resolved.{ploidy}/stats.txt",
-        status_list = "regions/eval/{parameters}/resolved.{ploidy}/list.tbl"
+        status_list = "regions/eval/{parameters}/resolved.{ploidy}/list.tbl",
+        resolved = "regions/eval/{parameters}/resolved.{ploidy}/resolved.txt"
     params:
         min_mapq = 30,
         extra = 0
@@ -619,8 +620,10 @@ rule count_resolved_segdup_regions_assembly:
                 segdup = "_".join(vals[5:8])
                 segdups[segdup].append((pref, suff, ctgStart < 10, contig_lengths[ctgChrom] - ctgEnd < 10))
         counter = Counter()
+        resolved_regions = set()
         stats = open(output["stats"], 'w')
         status_list = open(output["status_list"], 'w')
+        resolved_file = open(output["resolved"], 'w')
         for line in segdupLines:
             vals = line.split()
             segdup = "_".join(vals[0:3])
@@ -628,6 +631,7 @@ rule count_resolved_segdup_regions_assembly:
             for pref, suff, atStart, atEnd in segdups[segdup]:
                 if (atStart or pref > params["extra"]) and (atEnd or suff > params["extra"]):
                     resolving_contigs += 1
+                    resolved_regions.add((vals[0], vals[1], vals[2]))
             counter[resolving_contigs] += 1
             # write all entries
             vals.append( "|".join(["%d,%d" % (pref, suff) for pref, suff, atStart, atEnd in segdups[segdup]]))
@@ -635,6 +639,8 @@ rule count_resolved_segdup_regions_assembly:
             print(line, file=status_list)
         for i in range(max(counter.keys()) + 1):
             print("%d: %d" % (i, counter[i]), file=stats)
+        for region in resolved_regions:
+            print("\t".join(region), file=resolved_file)
         print("Total: %d" % (sum(counter.values())), file=stats)
         stats.close()
         status_list.close()
