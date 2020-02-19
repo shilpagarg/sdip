@@ -36,6 +36,16 @@ rule map_segdup_sequences:
     shell:
         "minimap2 -ax asm10 -t {threads} --secondary=yes -N 100 -p 0.80 {input.reference} {input.fasta} | samtools view -b | samtools sort > {output}"
 
+rule map_segdup_sequences_to_hg38:
+    input:
+        fasta = "regions/segdups/r{region}.fa",
+        reference = config["hg38"]
+    output:
+        "regions/segdups/aln_to_hg38/r{region}.bam"
+    threads: 2
+    shell:
+        "minimap2 -ax asm10 -t {threads} --secondary=yes -N 100 -p 0.80 {input.reference} {input.fasta} | samtools view -b | samtools sort > {output}"
+
 rule bam_to_tsv:
     input:
         "regions/segdups/r{region}.bam"
