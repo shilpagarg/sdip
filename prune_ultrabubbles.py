@@ -140,7 +140,7 @@ def main():
 			if args.min_length == -1 or (length != None and length < args.min_length):
 				paths = get_paths_in_bubble(graph, bubble[0], bubble[1])
 				remove_bubble(graph, paths)
-				print("Removed", bubble)
+				print("Removed", bubble, file=sys.stderr)
 		graph.write(sys.stdout)
 
 if __name__ == '__main__':
