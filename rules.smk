@@ -62,6 +62,14 @@ rule faidx:
     shell:
         "samtools faidx {input}"
 
+rule faidx2:
+    input:
+        "{name}.fasta"
+    output:
+        "{name}.fasta.fai"
+    shell:
+        "samtools faidx {input}"
+
 rule concat_regions:
     input:
         expand("regions/segdups/r{region}.tsv", region=all_segdup_regions)
@@ -138,9 +146,9 @@ rule get_nanopore_fastq:
 
 rule convert_fastq_to_fasta:
     input:
-        "regions/fastas_{technology}/r{region}.fastq"
+        "{name}.fastq"
     output:
-        "regions/fastas_{technology}/r{region}.fasta"
+        "{name}.fasta"
     shell:
         "seqtk seq -A {input} > {output}"
 
@@ -295,6 +303,7 @@ rule polish_contigs:
         else:
             #Extract contigs into separate files
             shell("samtools faidx {input.contigs}")
+            shell("mkdir -p %s" % (params["wd"]))
             fai_path = input["contigs"] + ".fai"
             with open(fai_path, 'r') as index_file:
                 num = 0
@@ -334,28 +343,14 @@ rule polish_contigs:
                 shell("samtools faidx -f -r {reads_path} {input.allreads} > {fastq_path}")
                 shell("seqtk seq -A {fastq_path} > {fasta_path}")
                 contig_path = params["wd"] + "contig%d.fa" % (num)
-                bam_path = params["wd"] + "aligned%d.bam" % (num)
-                shell("minimap2 -ax map-pb -t4 {contig_path} {fasta_path} | samtools view -b | samtools sort > {bam_path}")
-                shell("samtools index {bam_path}")
-                pileup_path = params["wd"] + "pileup%d.vcf" % (num)
-                snps_path = params["wd"] + "snps%d.vcf.gz" % (num)
-                indels_path = params["wd"] + "indels%d.vcf.gz" % (num)
-                calls_path = params["wd"] + "calls%d.vcf.gz" % (num)
-                shell("bcftools mpileup -Q0 -o20 -e10 -Ov -f {contig_path} {bam_path} > {pileup_path}")
-                shell("bcftools view -m2 -M3 -v snps -i 'DP > 3 & (I16[2] + I16[3]) / (I16[0] + I16[1]) > 1' -Oz {pileup_path} > {snps_path}")
-                shell("bcftools index {snps_path}")
-                shell("bcftools view -m2 -M2 -v indels -i 'DP > 3 & (I16[2] + I16[3]) / (I16[0] + I16[1]) > 1 & IMF>0.5' -Oz {pileup_path} > {indels_path}")
-                shell("bcftools index {indels_path}")
-                shell("bcftools concat {snps_path} {indels_path} | bcftools sort -Oz > {calls_path}")
-                shell("bcftools index {calls_path}")
-                norm_path = params["wd"] + "calls%d.norm.bcf" % (num)
+                sam_path = params["wd"] + "aligned%d.sam" % (num)
+                shell("minimap2 -ax map-pb -t4 {contig_path} {fasta_path} > {sam_path}")
                 consensus_path = params["wd"] + "consensus%d.fa" % (num)
-                shell("bcftools norm -f {contig_path} {calls_path} -Ob -o {norm_path}")
-                shell("bcftools index {norm_path}")
-                shell("cat {contig_path} | bcftools consensus {norm_path} > {consensus_path}")
+                shell("%s -t {threads} -u {fasta_path} {sam_path} {contig_path} > {consensus_path}"  % (config["tools"]["racon"]))
             
             #Concat polished contigs
             shell("cat %s > {output.contigs}" % (" ".join([(params["wd"] + "consensus%d.fa" % (num)) for num in range(1, num_haps + 1)])))
+
 
 rule self_align_contigs:
     input:
@@ -377,7 +372,8 @@ rule compute_identity_table:
 rule separate_paralogs:
     input:
         tbl = "regions/contigs/alignments.{parameters}/r{region}.tbl",
-        contigs = "regions/contigs/r{region}.{parameters}.polished.fa"
+        contigs = "regions/contigs/r{region}.{parameters}.polished.fa",
+        fai = "regions/contigs/r{region}.{parameters}.polished.fa.fai"
     output:
         contigs = "regions/contigs/r{region}.{parameters}.polished.diploid.fa"
     log:
@@ -388,7 +384,8 @@ rule separate_paralogs:
 rule remove_duplicates_haploid:
     input:
         tbl = "regions/contigs/alignments.{parameters}/r{region}.tbl",
-        contigs = "regions/contigs/r{region}.{parameters}.polished.fa"
+        contigs = "regions/contigs/r{region}.{parameters}.polished.fa",
+        fai = "regions/contigs/r{region}.{parameters}.polished.fa.fai"
     output:
         contigs = "regions/contigs/r{region}.{parameters}.polished.haploid.fa"
     log:
