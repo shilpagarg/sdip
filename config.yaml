@@ -5,10 +5,7 @@ hg38:
     .../GCA_000001405.15_GRCh38_no_alt_analysis_set.fa
 
 regions:
-    original:
-        t5.b5.d2: .../chm13.segdups.norepeat.bed
-        sda: .../chm13.collapses.bed
-    slop15k: .../chm13.segdups.norepeat.slop15k.bed
+	sda: .../coverage/chm13.collapses.bed
 
 reads:
     pacbio: .../reads.pacbio.fastq
@@ -22,8 +19,7 @@ tools:
     graphaligner: .../GraphAligner
     quast: .../quast.py
     svim-asm: .../svim-asm
+    racon: .../racon
 
 bacs:
     fasta: .../bacs.fa
-
-segdups: .../ucsc.merged.10k.slop.segdups.bed

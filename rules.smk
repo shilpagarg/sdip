@@ -19,7 +19,7 @@ wildcard_constraints:
 
 rule fetch_segdup_sequences:
     input:
-        regions = config["regions"]["original"]["sda"],
+        regions = config["regions"]["sda"],
         reference = config["genome"]
     output:
         "regions/segdups/r{region}.fa"
@@ -524,19 +524,15 @@ rule map_bacs_to_assembly:
 
 rule map_bacs_to_hg38:
     input:
-        hg38 = config["hg38"],
-        sd = config["segdups"], 
+        hg38 = config["hg38"], 
         bacs = config["bacs"]["fasta"],
     output:
-        bam = "regions/eval/bams/bacs.to.hg38.bam",
-        names = "regions/eval/bams/bacs.in.sd.names",
+        bam = "regions/eval/bams/bacs.to.hg38.bam"
     threads: 10
     shell:"""
 minimap2 -t {threads} --secondary=no -a -Y -x asm20 \
     -m 10000 -z 10000,50 -r 50000 --end-bonus=100 -O 5,56 -E 4,1 -B 5 \
      {input.hg38} {input.bacs} | samtools view -F 260 -u - | samtools sort -@ {threads} - > {output.bam}
-
-bedtools intersect -a {output.bam} -b {input.sd} | samtools view - | awk '{{print $1}}' > {output.names}
 """
 
 ##########
@@ -587,7 +583,7 @@ rule bam_to_bed:
 rule count_resolved_segdup_regions_assembly:
     input:
         bed = "regions/eval/{parameters}/bams/polished.{ploidy}.to.assembly.bed",
-        regions = config["regions"]["original"]["sda"],
+        regions = config["regions"]["sda"],
         index = config["genome"] + ".fai"
     output:
         inter = "regions/eval/{parameters}/resolved.{ploidy}/inter.bed",
@@ -657,12 +653,11 @@ ruleorder: count_resolved_segdup_regions_assembly > bam_to_bed
 
 rule bacs_to_contigs_tbl:
     input:
-        bam = "regions/eval/{parameters}/bams/bacs.to.polished.{ploidy}.bam",
-        names = "regions/eval/bams/bacs.in.sd.names"
+        bam = "regions/eval/{parameters}/bams/bacs.to.polished.{ploidy}.bam"
     output:
         tbl = "regions/eval/{parameters}/tables/bacs.to.polished.{ploidy}.tbl"
     shell:
-        "python3 %s/samIdentity.py --header --mask {input.names} {input.bam} > {output.tbl}" % (config["tools"]["paftest"])
+        "python3 %s/samIdentity.py --header {input.bam} > {output.tbl}" % (config["tools"]["paftest"])
 
 rule contigs_to_hg38_tbl:
     input:
@@ -694,20 +689,17 @@ rule make_qv_sum:
         val_matches = 1 - df["perID_by_matches"]/100
         df["qv_all"] = -10 * np.log10( val_all )
         df["qv_matches"] = -10 * np.log10( val_matches )
-        for mask in [True, False]:
-            tmp = df[df["mask"] == mask]
-            mean_all = tmp["perID_by_all"].mean()
-            mean_all_qv = -10 * np.log10(1 - mean_all/100)
-            mean_matches = tmp["perID_by_matches"].mean()
-            mean_matches_qv = -10 * np.log10(1 - mean_matches/100)
-            perfect_all = tmp["qv_all"].isna()
-            perfect_matches = tmp["qv_matches"].isna()
-            out += "Segdup BACs? = {}\n".format(mask)
-            out += "\tMean identity\tQV of mean identity\n"
-            out += "All\t{}\t{}\n".format(mean_all, mean_all_qv)
-            out += "Matches\t{}\t{}\n\n".format(mean_matches, mean_matches_qv)
-            out += "All (SDA method)\nPerfect\t{}\n{}\n\n".format(sum(perfect_all), tmp.qv_all.describe())            
-            out += "Matches (SDA method)\nPerfect\t{}\n{}\n\n".format(sum(perfect_matches), tmp.qv_matches.describe())            
+        mean_all = df["perID_by_all"].mean()
+        mean_all_qv = -10 * np.log10(1 - mean_all/100)
+        mean_matches = df["perID_by_matches"].mean()
+        mean_matches_qv = -10 * np.log10(1 - mean_matches/100)
+        perfect_all = df["qv_all"].isna()
+        perfect_matches = df["qv_matches"].isna()
+        out += "\tMean identity\tQV of mean identity\n"
+        out += "All\t{}\t{}\n".format(mean_all, mean_all_qv)
+        out += "Matches\t{}\t{}\n\n".format(mean_matches, mean_matches_qv)
+        out += "All (SDA method)\nPerfect\t{}\n{}\n\n".format(sum(perfect_all), df.qv_all.describe())            
+        out += "Matches (SDA method)\nPerfect\t{}\n{}\n\n".format(sum(perfect_matches), df.qv_matches.describe())            
         open(output["qv_sum"], "w+").write(out)
 
 rule count_misassemblies:
