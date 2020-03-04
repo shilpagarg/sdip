@@ -102,7 +102,7 @@ rule compute_path_cover:
     output:
         cover = "{sample}/{sample}.reducted.pruned.cover"
     shell:
-        "/project/heller_d-data/shilpa/scripts/MC-MPC/mc-mpc-solver/mc-mpc {input.lemon} {output.cover}"
+        "mc-mpc {input.lemon} {output.cover}"
 
 rule ul_align_to_graph:
     input:
@@ -257,7 +257,7 @@ rule svim_call_diploid:
     params:
         working_dir = "{sample}/sv_calls_diploid/"
     shell:
-        "/home/heller_d/.local/bin/svim-asm diploid {params.working_dir} {input.bam1} {input.bam2} {input.ref}"
+        "svim-asm diploid {params.working_dir} {input.bam1} {input.bam2} {input.ref}"
 
 rule svim_call_haploid:
     input:
@@ -269,4 +269,4 @@ rule svim_call_haploid:
     params:
         working_dir = "{sample}/sv_calls_haploid/"
     shell:
-        "/home/heller_d/.local/bin/svim-asm haploid --min_mapq 0 {params.working_dir} {input.bam} {input.ref}"
+        "svim-asm haploid --min_mapq 0 {params.working_dir} {input.bam} {input.ref}"
