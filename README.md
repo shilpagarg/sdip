@@ -36,6 +36,8 @@ make
 # add to PATH
 ```
 
+## Configuration
+
 Now that SDip is installed, you need to customize the configuration script under `config/config.yaml`. In particular, the input files need to specified.
 
 ```
@@ -45,6 +47,8 @@ vim config/config.yaml
 # execute workflow, deploy software dependencies via conda
 snakemake --use-conda
 ```
+
+## Execution
 
 Then, the workflow can be run:
 
@@ -58,6 +62,6 @@ snakemake --use-conda
 
 After the workflow completes, you will find the following output files in your working directory:
 
-Final polished contigs: `"<sample_name>/<sample_name>.polished.grouped.fa"`
-SV calls including genotypes:
+- Final polished contigs: `"<sample_name>/<sample_name>.polished.grouped.fa"`
+- SV calls including genotypes:
 `"<sample_name>/sv_calls_diploid/variants.vcf"`
