@@ -26,7 +26,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('contigs', type=str, help = 'Contigs in FASTA format')
     parser.add_argument('tbl', type=str, help = 'Table from samIdentities.py')
-    parser.add_argument('region', type=int, help = 'Region number for FASTA sequence headers')
+    parser.add_argument('prefix', type=str, help = 'Prefix for FASTA sequence headers')
     parser.add_argument('--min_similarity', '-m', type=float, default = 98.0, help = 'Minimum similarity cutoff for contig pairing (default: 98.0)')
     parser.add_argument('--max_similarity', '-x', type=float, default = 99.9, help = 'Contigs more similar than this value are merged (default: 99.9)')
     parser.add_argument('--haploid', action='store_true', help = 'Organism is haploid')
@@ -50,7 +50,7 @@ def main():
         for contig in contig_names:
             p_index += 1
             #Put single contigs into haplotype0
-            print(">r%s_paralog%s" % (args.region, p_index))
+            print(">%s_paralog%s" % (args.prefix, p_index))
             print(fasta_file.fetch(reference = contig))
     else:
         start = args.min_similarity
@@ -85,12 +85,12 @@ def main():
             if len(component) == 1:
                 #Put single contigs into haplotype0
                 contig = list(component)[0]
-                print(">r%s_paralog%s_haplotype0" % (args.region, p_index))
+                print(">%s_paralog%s_haplotype0" % (args.prefix, p_index))
                 print(fasta_file.fetch(reference = contig))
             elif len(component) == 2:
                 #Put paired contigs into haplotype1 and haplotype2
                 for c_index, contig in enumerate(component):
-                    print(">r%s_paralog%s_haplotype%s" % (args.region, p_index, c_index+1))
+                    print(">%s_paralog%s_haplotype%s" % (args.prefix, p_index, c_index+1))
                     print(fasta_file.fetch(reference = contig))
             else:
                 for c_index, contig in enumerate(component):
@@ -98,10 +98,10 @@ def main():
                     p_index2 = c_index // 2
                     #Put last single contig into haplotype0
                     if (c_index + 1) == len(component) and len(component) % 2 == 1:
-                        print(">r%s_paralog%s_haplotype0" % (args.region, p_index + p_index2))
+                        print(">%s_paralog%s_haplotype0" % (args.prefix, p_index + p_index2))
                         print(fasta_file.fetch(reference = contig))
                     else:
-                        print(">r%s_paralog%s_haplotype%s" % (args.region, p_index + p_index2, (c_index % 2) + 1))
+                        print(">%s_paralog%s_haplotype%s" % (args.prefix, p_index + p_index2, (c_index % 2) + 1))
                         print(fasta_file.fetch(reference = contig))
                 p_index+=p_index2
 

@@ -1,0 +1,12 @@
+reads:
+    r1:
+        pacbio: /project/heller_d-data/shilpa/NA12878/regions/fastas_pacbio/r1.fasta
+        nanopore: /project/heller_d-data/shilpa/NA12878/regions/fastas_nanopore/r1.fasta
+
+reference:
+    /project/heller_d-data/genomes/GRCh38_no_alt_analysis_set/GCA_000001405.15_GRCh38_no_alt_analysis_set.fa
+
+params:
+    tip_max_size: 5
+    bubble_min_length: 5000
+    degree_max_size: 2
