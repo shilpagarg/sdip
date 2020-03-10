@@ -10,17 +10,17 @@ SDip has been implemented as a [snakemake](https://snakemake.readthedocs.io) pip
 ```
 # clone workflow into working directory
 git clone https://github.com/shilpagarg/sdip.git path/to/workdir
+cd path/to/workdir
 # switch to branch "pipeline"
 git checkout pipeline
-cd path/to/workdir
+# Initialize submodules
+git submodule update --init
 ```
 
 Most dependencies of SDip are automatically deployed using conda. Two dependencies, however, need to be installed manually. To install svim-asm:
 
 ```
-# clone repository for svim-asm
-git clone https://github.com/eldariont/svim-asm.git path/to/install-dir
-cd path/to/install-dir
+cd path/to/workdir/workflow/bin/svim_asm
 # install using pip, make sure that svim-asm ends up to be in the PATH
 pip install .
 ```
@@ -28,9 +28,7 @@ pip install .
 The second dependency to install is mc-mpc:
 
 ```
-# clone repository for mc-mpc
-git clone https://github.com/tobtobtob/MC-MPC.git path/to/install-dir2
-cd path/to/install-dir2/mc-mpc-solver
+cd path/to/workdir/workflow/bin/MC-MPC/mc-mpc-solver
 # compile mc-mpc
 make
 # add to PATH

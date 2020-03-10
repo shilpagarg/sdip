@@ -1,6 +1,3 @@
 [submodule "workflow/bin/svim-asm"]
 	path = workflow/bin/svim-asm
 	url = https://github.com/eldariont/svim-asm.git
-[submodule "workflow/bin/MC-MPC"]
-	path = workflow/bin/MC-MPC
-	url = https://github.com/tobtobtob/MC-MPC.git
