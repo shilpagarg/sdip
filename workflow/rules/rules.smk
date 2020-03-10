@@ -23,6 +23,8 @@ rule fetch_segdup_sequences:
         reference = config["genome"]
     output:
         "regions/segdups/r{region}.fa"
+    conda:
+        "../envs/samtools.yaml"
     shell:
         "reg=`awk '{{if (NR=={wildcards.region}) {{ print $1\":\"$2\"-\"$3 }} }}' {input.regions}`; samtools faidx {input.reference} ${{reg}} > {output}"
 
@@ -33,6 +35,8 @@ rule map_segdup_sequences:
     output:
         "regions/segdups/r{region}.bam"
     threads: 10
+    conda:
+        "../envs/minimap.yaml"
     shell:
         "minimap2 -ax asm10 -t {threads} --secondary=yes -N 100 -p 0.80 {input.reference} {input.fasta} | samtools view -b | samtools sort > {output}"
 
@@ -43,6 +47,8 @@ rule map_segdup_sequences_to_hg38:
     output:
         "regions/segdups/aln_to_hg38/r{region}.bam"
     threads: 2
+    conda:
+        "../envs/minimap.yaml"
     shell:
         "minimap2 -ax asm10 -t {threads} --secondary=yes -N 100 -p 0.80 {input.reference} {input.fasta} | samtools view -b | samtools sort > {output}"
 
@@ -51,6 +57,8 @@ rule bam_to_tsv:
         "regions/segdups/r{region}.bam"
     output:
         "regions/segdups/r{region}.tsv"
+    conda:
+        "../envs/bedtools.yaml"
     shell:
         "bedtools bamtobed -i {input} | awk 'OFS=\"\\t\" {{ print {wildcards.region}, $0 }}' > {output}"
 
@@ -59,6 +67,8 @@ rule faidx:
         "{name}.fa"
     output:
         "{name}.fa.fai"
+    conda:
+        "../envs/samtools.yaml"
     shell:
         "samtools faidx {input}"
 
@@ -67,6 +77,8 @@ rule faidx2:
         "{name}.fasta"
     output:
         "{name}.fasta.fai"
+    conda:
+        "../envs/samtools.yaml"
     shell:
         "samtools faidx {input}"
 
@@ -102,6 +114,8 @@ rule recruit_pacbio_reads:
     params:
         primary_mapq_threshold = 1 
     threads: 5
+    conda:
+        "../envs/samtools.yaml"
     shell:
         "reg=`awk '{{if ($1=={wildcards.region}) {{ print $2\":\"$3\"-\"$4 }} }}' {input.regions}`; samtools view -b -@ {threads} -F 256 -q {params.primary_mapq_threshold} {input.bam} ${{reg}} > {output}"
 
@@ -115,6 +129,8 @@ rule recruit_nanopore_reads:
     params:
         primary_mapq_threshold = 30
     threads: 5
+    conda:
+        "../envs/samtools.yaml"
     shell:
         "reg=`awk '{{if ($1=={wildcards.region}) {{ print $2\":\"$3\"-\"$4 }} }}' {input.regions}`; samtools view -b -@ {threads} -F 256 -q {params.primary_mapq_threshold} {input.bam} ${{reg}} > {output}"
 
@@ -123,6 +139,8 @@ rule get_read_names:
         "regions/bams_{technology}/r{region}.bam"
     output:
         "regions/reads_{technology}/r{region}.reads"
+    conda:
+        "../envs/samtools.yaml"
     shell:
         "samtools view {input} | cut -d$'\t' -f1 | sort | uniq > {output}"
 
@@ -132,6 +150,8 @@ rule get_pacbio_fastq:
         names = "regions/reads_pacbio/r{region}.reads"
     output:
         temp("regions/fastas_pacbio/r{region}.fastq")
+    conda:
+        "../envs/samtools.yaml"
     shell:
         "LINES=$(wc -l < {input.names}) ; if [ $LINES -lt 20000 ] && [ $LINES -gt 0 ]; then samtools faidx -f -r {input.names} {input.allreads} > {output}; else echo '' > {output}; fi"
 
@@ -141,6 +161,8 @@ rule get_nanopore_fastq:
         names = "regions/reads_nanopore/r{region}.reads"
     output:
         temp("regions/fastas_nanopore/r{region}.fastq")
+    conda:
+        "../envs/samtools.yaml"
     shell:
         "LINES=$(wc -l < {input.names}) ; if [ $LINES -lt 20000 ] && [ $LINES -gt 0 ]; then samtools faidx -f -r {input.names} {input.allreads} > {output}; else echo '' > {output}; fi"
 
@@ -149,6 +171,8 @@ rule convert_fastq_to_fasta:
         "{name}.fastq"
     output:
         "{name}.fasta"
+    conda:
+        "../envs/seqtk.yaml"
     shell:
         "seqtk seq -A {input} > {output}"
 
@@ -158,6 +182,8 @@ rule all_vs_all_alignment:
     output:
         paf = "regions/pafs/r{region}.fasta.paf"
     threads: 10
+    conda:
+        "../envs/minimap.yaml"
     shell:
         "minimap2 -c -x asm20 -DP --no-long-join --cs -n500 -t {threads} {input.fasta} {input.fasta} | sort -k8n -k6 > {output.paf}"
 
@@ -167,7 +193,7 @@ rule filter_paf_for_long_indels:
     output:
         paf = "regions/pafs/r{region}.fasta.filtered.paf"
     shell:
-        "python3 %s/filter_indels_in_paf.py {input.paf} --max_indel 50 > {output.paf}" % (config["tools"]["paftest"])
+        "python workflow/scripts/filter_indels_in_paf.py {input.paf} --max_indel 50 > {output.paf}"
 
 rule generate_graph_use_paf:
     input:
@@ -182,7 +208,7 @@ rule generate_graph_use_paf:
     #log:
     #    "regions/logs/r{region}.log.gz"
     shell:
-        "python3 %s/haplotype.py {input.fasta} -o {params.output} -t {threads} -p {input.paf} 2>/dev/null" % (config["tools"]["paftest"])
+        "python workflow/scripts/haplotype.py {input.fasta} -o {params.output} -t {threads} -p {input.paf} 2>/dev/null"
 
 rule prune_graph:
     input:
@@ -190,17 +216,14 @@ rule prune_graph:
     output:        
         gfa = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_min_length}.d{degree_max_size}.gfa"
     shell:
-        """python3 %s/prune_tips.py {input.gfa} remove --max_size {wildcards.tip_max_size} | \
-           python3 %s/prune_ultrabubbles.py remove --min_length {wildcards.bubble_min_length} | \
-           python3 %s/prune_tips.py remove --max_size {wildcards.tip_max_size} | \
-           python3 %s/prune_ultrabubbles.py remove --min_length {wildcards.bubble_min_length} | \
-           python3 %s/prune_tips.py remove --max_size {wildcards.tip_max_size} | \
-           python3 %s/prune_degree3.py --max_size {wildcards.degree_max_size} | \
-           python3 %s/prune_ultrabubbles.py remove --min_length {wildcards.bubble_min_length} | \
-           python3 %s/prune_tips.py remove --max_size {wildcards.tip_max_size} > {output.gfa}""" % (config["tools"]["paftest"], config["tools"]["paftest"],
-                                                                                                    config["tools"]["paftest"], config["tools"]["paftest"],
-                                                                                                    config["tools"]["paftest"], config["tools"]["paftest"],
-                                                                                                    config["tools"]["paftest"], config["tools"]["paftest"])
+        """python workflow/scripts/prune_tips.py {input.gfa} remove --max_size {wildcards.tip_max_size} | \
+           python workflow/scripts/prune_ultrabubbles.py remove --min_length {wildcards.bubble_min_length} | \
+           python workflow/scripts/prune_tips.py remove --max_size {wildcards.tip_max_size} | \
+           python workflow/scripts/prune_ultrabubbles.py remove --min_length {wildcards.bubble_min_length} | \
+           python workflow/scripts/prune_tips.py remove --max_size {wildcards.tip_max_size} | \
+           python workflow/scripts/prune_degree3.py --max_size {wildcards.degree_max_size} | \
+           python workflow/scripts/prune_ultrabubbles.py remove --min_length {wildcards.bubble_min_length} | \
+           python workflow/scripts/prune_tips.py remove --max_size {wildcards.tip_max_size} > {output.gfa}"""
 
 #################
 #Extract contigs#
@@ -213,7 +236,7 @@ rule convert_lemon:
         lemon = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.lemon",
         table = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.tbl"
     shell:
-        "python3 %s/convert_to_lemon.py {input.gfa} {output.table} > {output.lemon}" % (config["tools"]["paftest"])
+        "python workflow/scripts/convert_to_lemon.py {input.gfa} {output.table} > {output.lemon}"
 
 rule compute_path_cover:
     input:
@@ -221,7 +244,7 @@ rule compute_path_cover:
     output:
         cover = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.cover"
     shell:
-        "%s {input.lemon} {output.cover}" % (config["tools"]["mc-mpc"])
+        "mc-mpc {input.lemon} {output.cover}"
 
 rule cover_statistics:
     input:
@@ -266,8 +289,10 @@ rule ul_align_to_graph:
         aln = "regions/jsons/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.json"
     log: "regions/logs/nanopore_alignment/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.log"
     threads: 5
+    conda:
+        "../envs/graphaligner.yaml"
     shell:
-        "%s -g {input.graph} -f {input.nano} -t {threads} --seeds-mum-count 30000 -a {output.aln} --seeds-mxm-length 10 -b 35 1>{log} 2>&1" % (config["tools"]["graphaligner"])
+        "GraphAligner -g {input.graph} -f {input.nano} -t {threads} --seeds-mum-count 30000 -a {output.aln} --seeds-mxm-length 10 -b 35 1>{log} 2>&1"
 
 rule extract_contigs_from_cover:
     input:
@@ -282,7 +307,7 @@ rule extract_contigs_from_cover:
     params:
         prefix = "r{region}"
     shell:
-        "python3 %s/contigs_from_nanopore_cover.py --prefix {params.prefix} {input.gfa} {input.lemon} {input.table} {input.cover} --json {input.json} --paths {output.reads} > {output.contigs}" % (config["tools"]["paftest"])
+        "python workflow/scripts/contigs_from_nanopore_cover.py --prefix {params.prefix} {input.gfa} {input.lemon} {input.table} {input.cover} --json {input.json} --paths {output.reads} > {output.contigs}"
 
 rule polish_contigs:
     input:
@@ -295,62 +320,10 @@ rule polish_contigs:
     params:
         wd = "regions/polishing/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/"
     threads: 4
-    run:
-        with open(input["contigs"], 'r') as contigs_file:
-            content = contigs_file.read()
-        if len(content) < 1:
-            shell("touch {output.contigs}")
-        else:
-            #Extract contigs into separate files
-            shell("samtools faidx {input.contigs}")
-            shell("mkdir -p %s" % (params["wd"]))
-            fai_path = input["contigs"] + ".fai"
-            with open(fai_path, 'r') as index_file:
-                num = 0
-                for line in index_file:
-                    fields = line.strip().split()
-                    name = fields[0]
-                    num += 1
-                    path = params["wd"] + "contig%d.fa" % (num)
-                    shell("samtools faidx {input.contigs} {name} > {path}")
-            num_haps = num
-            
-            #Store reads for each contig
-            with open(input["reads"], 'r') as read_file:
-                reads = defaultdict(list)
-                for line in read_file:
-                    fields = line.strip().split()
-                    num = int(fields[0])
-                    assert num <= num_haps
-                    reads[num].append(fields[1])
-            
-            #Add contained reads
-            with open(input["contained_reads"], 'r') as contained_file:
-                for num in range(1, num_haps + 1):
-                    for line in contained_file:
-                        fields = line.strip().split()
-                        if fields[1] in reads[num]:
-                            reads[num].append(fields[0])
-            
-            #Polish each contig
-            for num in range(1, num_haps + 1):
-                reads_path = params["wd"] + "reads%d.txt" % (num)
-                with open(reads_path, 'w') as read_file:
-                    for r in reads[num]:
-                        print(r, file=read_file)
-                fastq_path = params["wd"] + "reads%d.fq" % (num)
-                fasta_path = params["wd"] + "reads%d.fa" % (num)
-                shell("samtools faidx -f -r {reads_path} {input.allreads} > {fastq_path}")
-                shell("seqtk seq -A {fastq_path} > {fasta_path}")
-                contig_path = params["wd"] + "contig%d.fa" % (num)
-                sam_path = params["wd"] + "aligned%d.sam" % (num)
-                shell("minimap2 -ax map-pb -t4 {contig_path} {fasta_path} > {sam_path}")
-                consensus_path = params["wd"] + "consensus%d.fa" % (num)
-                shell("%s -t {threads} -u {fasta_path} {sam_path} {contig_path} > {consensus_path}"  % (config["tools"]["racon"]))
-            
-            #Concat polished contigs
-            shell("cat %s > {output.contigs}" % (" ".join([(params["wd"] + "consensus%d.fa" % (num)) for num in range(1, num_haps + 1)])))
-
+    conda:
+        "../envs/polishing.yaml"
+    script:
+        "../scripts/polishing.py"
 
 rule self_align_contigs:
     input:
@@ -358,6 +331,8 @@ rule self_align_contigs:
     output:
         bam = "regions/contigs/alignments.{parameters}/r{region}.bam"
     threads: 4
+    conda:
+        "../envs/minimap.yaml"
     shell:
         "minimap2 -x asm20 -Y -a --eqx -t {threads} {input.contigs} {input.contigs} | samtools view -F 4 -u - | samtools sort - > {output.bam}"
 
@@ -367,7 +342,7 @@ rule compute_identity_table:
     output:
         tbl = "regions/contigs/alignments.{parameters}/r{region}.tbl"
     shell:
-        "python3 %s/samIdentity.py --header {input.bam} | awk '$1 != $5' > {output.tbl}" % (config["tools"]["paftest"])
+        "python workflow/scripts/samIdentity.py --header {input.bam} | awk '$1 != $5' > {output.tbl}"
 
 rule separate_paralogs:
     input:
@@ -379,7 +354,7 @@ rule separate_paralogs:
     log:
         "regions/logs/merge_haplotypes/r{region}.{parameters}.log"
     shell:
-        "python3 %s/merge_haplotypes.py --max_similarity 99.95 {input.contigs} {input.tbl} {wildcards.region} 2> {log} > {output.contigs}" % (config["tools"]["paftest"])
+        "python workflow/scripts/merge_haplotypes.py --max_similarity 99.95 {input.contigs} {input.tbl} {wildcards.region} 2> {log} > {output.contigs}"
 
 rule remove_duplicates_haploid:
     input:
@@ -391,7 +366,7 @@ rule remove_duplicates_haploid:
     log:
         "regions/logs/merge_haplotypes/r{region}.{parameters}.log"
     shell:
-        "python3 %s/merge_haplotypes.py --haploid --max_similarity 99.95 {input.contigs} {input.tbl} {wildcards.region} 2> {log} > {output.contigs}" % (config["tools"]["paftest"])
+        "python workflow/scripts/merge_haplotypes.py --haploid --max_similarity 99.95 {input.contigs} {input.tbl} {wildcards.region} 2> {log} > {output.contigs}"
 
 #############
 #Plot graphs#
@@ -402,16 +377,20 @@ rule plot_bandage_raw:
         graph = "regions/gfas/r{region}.reducted.gfa"
     output:
         png = "regions/pngs/r{region}.png"
+    conda:
+        "../envs/bandage.yaml"
     shell:
-        "LINES=$(wc -l < {input.graph}) ; if [ $LINES -gt 0 ]; then %s image {input.graph} {output.png} --height 4000; else echo '' > {output.png}; fi" % (config["tools"]["bandage"])
+        "LINES=$(wc -l < {input.graph}) ; if [ $LINES -gt 0 ]; then Bandage image {input.graph} {output.png} --height 4000; else echo '' > {output.png}; fi"
 
 rule plot_bandage_pruned:
     input:
         graph = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.gfa"
     output:
         png = "regions/pngs/r{region}.pruned.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.png"
+    conda:
+        "../envs/bandage.yaml"
     shell:
-        "LINES=$(wc -l < {input.graph}) ; if [ $LINES -gt 0 ]; then %s image {input.graph} {output.png} --height 4000; else echo '' > {output.png}; fi" % (config["tools"]["bandage"])
+        "LINES=$(wc -l < {input.graph}) ; if [ $LINES -gt 0 ]; then Bandage image {input.graph} {output.png} --height 4000; else echo '' > {output.png}; fi"
 
 #############
 #Map contigs#
@@ -442,10 +421,12 @@ rule split_to_diploid:
         h0 = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.haplotype0.fa",
         h1 = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.haplotype1.fa",
         h2 = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.haplotype2.fa"
-    run:
-        shell("samtools faidx -r <(cat {input.fai} | cut -f 1 | grep \"_haplotype0\") {input.fa} > {output.h0}")
-        shell("samtools faidx -r <(cat {input.fai} | cut -f 1 | grep \"_haplotype1\") {input.fa} > {output.h1}")
-        shell("samtools faidx -r <(cat {input.fai} | cut -f 1 | grep \"_haplotype2\") {input.fa} > {output.h2}")
+    conda:
+        "../envs/samtools.yaml"
+    shell:
+        """samtools faidx -r <(cat {input.fai} | cut -f 1 | grep \"_haplotype0\") {input.fa} > {output.h0} &&
+           samtools faidx -r <(cat {input.fai} | cut -f 1 | grep \"_haplotype1\") {input.fa} > {output.h1} &&
+           samtools faidx -r <(cat {input.fai} | cut -f 1 | grep \"_haplotype2\") {input.fa} > {output.h2}"""
 
 rule filter_haplotype0:
     input:
@@ -453,8 +434,10 @@ rule filter_haplotype0:
         fai = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.grouped.fa.fai"
     output:
         fa = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.diploid.fa",
-    run:
-        shell("samtools faidx -r <(cat {input.fai} | cut -f 1 | grep -v \"_haplotype0\") {input.fa} > {output.fa}")
+    conda:
+        "../envs/samtools.yaml"
+    shell:
+        "samtools faidx -r <(cat {input.fai} | cut -f 1 | grep -v \"_haplotype0\") {input.fa} > {output.fa}"
 
 
 rule map_contigs_to_assembly:
@@ -464,6 +447,8 @@ rule map_contigs_to_assembly:
     output:
         "regions/eval/{parameters}/bams/polished.{ploidy}.to.assembly.bam"
     threads: 10
+    conda:
+        "../envs/minimap.yaml"
     shell:
         "minimap2 -t {threads} --secondary=no -a --eqx -Y -x asm20 -m 10000 -z 10000,50 -r 50000 --end-bonus=100 -O 5,56 -E 4,1 -B 5 \
         {input.ref} {input.fa} | samtools view -F 260 -u - | samtools sort - > {output}"
@@ -475,6 +460,8 @@ rule map_contigs_to_bacs:
     output:
         bam = "regions/eval/{parameters}/bams/polished.{ploidy}.to.bacs.bam"
     threads: 10
+    conda:
+        "../envs/minimap.yaml"
     shell:
         "minimap2 -I 8G -t {threads} --secondary=no -a --eqx -Y -x asm20 \
         {input.bacs} {input.asm} | samtools view -F 2308 -u - | samtools sort - > {output.bam}"
@@ -486,6 +473,8 @@ rule map_bacs_to_contigs:
     output:
         bam = "regions/eval/{parameters}/bams/bacs.to.polished.{ploidy}.bam"
     threads: 10
+    conda:
+        "../envs/minimap.yaml"
     shell:
         "minimap2 -I 8G -t {threads} --secondary=no -a --eqx -Y -x asm20 -m 10000 -z 10000,50 -r 50000 --end-bonus=100 -O 5,56 -E 4,1 -B 5 \
         {input.asm} {input.bacs} | samtools view -F 2308 -u - | samtools sort - > {output.bam}"
@@ -495,6 +484,8 @@ rule index_bam:
         "{name}.bam"
     output:
         "{name}.bam.bai"
+    conda:
+        "../envs/samtools.yaml"
     shell:
         "samtools index {input}"
 
@@ -505,6 +496,8 @@ rule map_contigs_to_hg38:
     output:
         bam = "regions/eval/{parameters}/bams/polished.{ploidy}.to.hg38.bam"
     threads: 10
+    conda:
+        "../envs/minimap.yaml"
     shell:"""
 minimap2 -t {threads} --secondary=no -a --eqx -Y -x asm20 \
     -m 10000 -z 10000,50 -r 50000 --end-bonus=100 -O 5,56 -E 4,1 -B 5 \
@@ -518,6 +511,8 @@ rule map_bacs_to_assembly:
     output:
         "regions/eval/bams/bacs.to.assembly.bam"
     threads: 10
+    conda:
+        "../envs/minimap.yaml"
     shell:
         "minimap2 -t {threads} --secondary=no -a --eqx -Y -x asm20 -m 10000 -z 10000,50 -r 50000 --end-bonus=100 -O 5,56 -E 4,1 -B 5 \
         {input.ref} {input.bacs} | samtools view -F 260 -u - | samtools sort - > {output}"
@@ -529,6 +524,8 @@ rule map_bacs_to_hg38:
     output:
         bam = "regions/eval/bams/bacs.to.hg38.bam"
     threads: 10
+    conda:
+        "../envs/minimap.yaml"
     shell:"""
 minimap2 -t {threads} --secondary=no -a -Y -x asm20 \
     -m 10000 -z 10000,50 -r 50000 --end-bonus=100 -O 5,56 -E 4,1 -B 5 \
@@ -547,8 +544,10 @@ rule quast_to_assembly:
         "regions/eval/{parameters}/quast_to_assembly/{ploidy}/report.html"
     params:
         wd = "regions/eval/{parameters}/quast_to_assembly/{ploidy}"
+    conda:
+        "../envs/quast.yaml"
     shell:
-        "%s --fragmented --min-contig 20000 --min-alignment 5000 --min-identity 95.0 --unaligned-part-size 2000 --no-icarus -o {params.wd} -r {input.ref} {input.fa}" % (config["tools"]["quast"])
+        "quast.py --fragmented --min-contig 20000 --min-alignment 5000 --min-identity 95.0 --unaligned-part-size 2000 --no-icarus -o {params.wd} -r {input.ref} {input.fa}"
 
 rule quast_to_bacs:
     input:
@@ -558,8 +557,10 @@ rule quast_to_bacs:
         "regions/eval/{parameters}/quast_to_bacs/{ploidy}/report.html"
     params:
         wd = "regions/eval/{parameters}/quast_to_bacs/{ploidy}"
+    conda:
+        "../envs/quast.yaml"
     shell:
-        "%s --fragmented --min-contig 20000 --min-alignment 5000 --min-identity 98.0 --unaligned-part-size 2000 --no-icarus -o {params.wd} -r {input.ref} {input.fa}" % (config["tools"]["quast"])
+        "quast.py --fragmented --min-contig 20000 --min-alignment 5000 --min-identity 98.0 --unaligned-part-size 2000 --no-icarus -o {params.wd} -r {input.ref} {input.fa}"
 
 rule quast_to_hg38:
     input:
@@ -569,24 +570,36 @@ rule quast_to_hg38:
         "regions/eval/{parameters}/quast_to_hg38/{ploidy}/report.html"
     params:
         wd = "regions/eval/{parameters}/quast_to_hg38/{ploidy}"
+    conda:
+        "../envs/quast.yaml"
     shell:
-        "%s --fragmented --min-contig 20000 --min-alignment 5000 --min-identity 95.0 --unaligned-part-size 2000 --no-icarus -o {params.wd} -r {input.ref} {input.fa}" % (config["tools"]["quast"])
+        "quast.py --fragmented --min-contig 20000 --min-alignment 5000 --min-identity 95.0 --unaligned-part-size 2000 --no-icarus -o {params.wd} -r {input.ref} {input.fa}"
 
 rule bam_to_bed:
     input:
         bam = "{name}.bam"
     output:
         bed = "{name}.bed"
+    conda:
+        "../envs/bedtools.yaml"
     shell:
         "bedtools bamtobed -i {input.bam} | bedtools sort -i - | cut -f 1,2,3,4,5 > {output.bed}"
 
-rule count_resolved_segdup_regions_assembly:
+rule overlap_alignments_with_regions:
     input:
         bed = "regions/eval/{parameters}/bams/polished.{ploidy}.to.assembly.bed",
+        regions = config["regions"]["sda"]
+    output:
+        inter = "regions/eval/{parameters}/resolved.{ploidy}/inter.bed"
+    shell:
+        "bedtools intersect -a {input.bed} -b {input.regions} -wa -wb > {output.inter}"
+
+rule count_resolved_segdup_regions_assembly:
+    input:
         regions = config["regions"]["sda"],
+        inter = "regions/eval/{parameters}/resolved.{ploidy}/inter.bed",
         index = config["genome"] + ".fai"
     output:
-        inter = "regions/eval/{parameters}/resolved.{ploidy}/inter.bed",
         stats = "regions/eval/{parameters}/resolved.{ploidy}/stats.txt",
         status_list = "regions/eval/{parameters}/resolved.{ploidy}/list.tbl",
         resolved = "regions/eval/{parameters}/resolved.{ploidy}/resolved.txt"
@@ -594,7 +607,6 @@ rule count_resolved_segdup_regions_assembly:
         min_mapq = 30,
         extra = 0
     run:
-        shell("bedtools intersect -a {input.bed} -b {input.regions} -wa -wb > {output.inter}")
         #Read segdup regions
         with open(input["regions"]) as segdupFile:
             segdupLines = segdupFile.readlines()
@@ -610,7 +622,7 @@ rule count_resolved_segdup_regions_assembly:
             for line in fai_file:
                 fields = line.strip().split()
                 contig_lengths[fields[0]] = int(fields[1])
-        with open(output["inter"]) as tabFile:
+        with open(input["inter"]) as tabFile:
             for line in tabFile:
                 vals = line.split()
                 mapq = int(vals[4])
@@ -648,24 +660,23 @@ rule count_resolved_segdup_regions_assembly:
         stats.close()
         status_list.close()
 
-ruleorder: count_resolved_segdup_regions_assembly > bam_to_bed
-
-
 rule bacs_to_contigs_tbl:
     input:
         bam = "regions/eval/{parameters}/bams/bacs.to.polished.{ploidy}.bam"
     output:
         tbl = "regions/eval/{parameters}/tables/bacs.to.polished.{ploidy}.tbl"
     shell:
-        "python3 %s/samIdentity.py --header {input.bam} > {output.tbl}" % (config["tools"]["paftest"])
+        "python workflow/scripts/samIdentity.py --header {input.bam} > {output.tbl}"
 
 rule contigs_to_hg38_tbl:
     input:
         bam = "regions/eval/{parameters}/bams/polished.{ploidy}.to.hg38.bam"
     output:
         tbl = "regions/eval/{parameters}/tables/polished.{ploidy}.to.hg38.tbl"
+    conda:
+        "../envs/samtools.yaml"
     shell:
-        "python3 %s/samIdentity.py --header <(samtools view -h -F 2308 {input.bam}) > {output.tbl}" % (config["tools"]["paftest"])
+        "python workflow/scripts/samIdentity.py --header <(samtools view -h -F 2308 {input.bam}) > {output.tbl}"
 
 rule contigs_to_bacs_tbl:
     input:
@@ -673,7 +684,7 @@ rule contigs_to_bacs_tbl:
     output:
         tbl = "regions/eval/{parameters}/tables/polished.{ploidy}.to.bacs.tbl"
     shell:
-        "python3 %s/samIdentity.py --header {input.bam} > {output.tbl}" % (config["tools"]["paftest"])
+        "python workflow/scripts/samIdentity.py --header {input.bam} > {output.tbl}"
 
 rule make_qv_sum:
     input:
@@ -732,7 +743,7 @@ rule svim_call_diploid:
     params:
         working_dir = "regions/svim/{parameters}/contigs.diploid/"
     shell:
-        "%s diploid {params.working_dir} {input.bam1} {input.bam2} {input.genome}" % (config["tools"]["svim-asm"])
+        "svim-asm diploid {params.working_dir} {input.bam1} {input.bam2} {input.genome}"
 
 rule svim_call_haploid:
     input:
@@ -744,7 +755,7 @@ rule svim_call_haploid:
     params:
         working_dir = "regions/svim/{parameters}/contigs.haploid/"
     shell:
-        "%s haploid --min_mapq 0 {params.working_dir} {input.bam} {input.genome}" % (config["tools"]["svim-asm"])
+        "svim-asm haploid --min_mapq 0 {params.working_dir} {input.bam} {input.genome}"
 
 
 rule svim_call_bacs:
@@ -757,13 +768,15 @@ rule svim_call_bacs:
     params:
         working_dir = "regions/svim/{parameters}/bacs.haploid/"
     shell:
-        "%s haploid --min_mapq 0 {params.working_dir} {input.bam} {input.genome}" % (config["tools"]["svim-asm"])
+        "svim-asm haploid --min_mapq 0 {params.working_dir} {input.bam} {input.genome}"
 
 rule normalize_calls:
     input:
         "{name}.vcf"
     output:
         "{name}.norm.vcf"
+    conda:
+        "../envs/samtools.yaml"
     shell:
         "bcftools norm -d all {input} > {output}"
 
@@ -773,5 +786,7 @@ rule compress_calls:
     output:
         gz = "{name}.vcf.gz",
         tbi = "{name}.vcf.gz.tbi"
+    conda:
+        "../envs/samtools.yaml"
     shell:
         "bgzip -c {input} > {output.gz} && tabix -p vcf {output.gz}"
