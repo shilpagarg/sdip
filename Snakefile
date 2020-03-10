@@ -1,17 +1,17 @@
-"""
-This is a template Snakefile that should be copied to the respective working directory together with the config.yaml.
-Please customize this Snakefile (particularly the regions and the target files in "rule all").
-Please also customize the paths in the config.yaml
-"""
+# The main entry point of this workflow.
+# After configuring the workflow in config/config.yaml, running snakemake --use-conda should successfully execute the workflow.
 
-#include configuration file from same directory
-configfile: "config.yaml"
+#include configuration file
+configfile: "config/config.yaml"
+
+#include collection of rules
+include: "workflow/rules/rules.smk"
 
 #Range of regions in regions file that is defined in config file
-all_segdup_regions = range(1, 605)
+all_segdup_regions = range(1, 487)
 
 #Range of regions in segdups.similar.tsv
-filtered_segdup_regions = range(1, 505)
+filtered_segdup_regions = range(1, 467)
 #Range of big regions: should be initially empty, later insert regions that take too long to process
 big_regions = []
 #Range of regions with cycles: should be initially empty, later insert regions that have an empty .lemon graph in regions/gfas/pruned
@@ -21,9 +21,6 @@ duplicate_regions = []
 # Range of regions that produce empty contigs
 empty_contigs = []
 good_regions = [r for r in filtered_segdup_regions if (not r in big_regions) and (not r in cycle_regions) and (not r in duplicate_regions) and (not r in empty_contigs)]
-
-#include rules.smk file from local clone of sdip repository
-include: "/path/to/sdip/rules.smk"
 
 rule all:
     input:
