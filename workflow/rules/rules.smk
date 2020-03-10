@@ -104,6 +104,18 @@ rule concat_regions:
 #Recruit reads#
 ######################
 
+rule align_pacbio_reads:
+    input:
+        ref = config["genome"],
+        fasta = config["reads"]["pacbio"]
+    output:
+        bam = "alignment_pacbio/pooled.sorted.bam"
+    threads: 20
+    conda:
+        "../envs/minimap.yaml"
+    shell:
+        "minimap2 -a -k 19 -O 5,56 -E 4,1 -B 5 -z 400,50 -r 2k -t {threads} --eqx --secondary=no {input.ref} {input.fasta} | samtools view -F 4 -u - | samtools sort - > {output.bam}"
+
 rule recruit_pacbio_reads:
     input:
         regions = "segdups.similar.tsv",
@@ -118,6 +130,18 @@ rule recruit_pacbio_reads:
         "../envs/samtools.yaml"
     shell:
         "reg=`awk '{{if ($1=={wildcards.region}) {{ print $2\":\"$3\"-\"$4 }} }}' {input.regions}`; samtools view -b -@ {threads} -F 256 -q {params.primary_mapq_threshold} {input.bam} ${{reg}} > {output}"
+
+rule align_nanopore_reads:
+    input:
+        ref = config["genome"],
+        fasta = config["reads"]["nanopore"]
+    output:
+        bam = "alignment_nanopore/pooled.sorted.bam"
+    threads: 20
+    conda:
+        "../envs/minimap.yaml"
+    shell:
+        "minimap2 -aL -z 600,200 -x map-ont -t {threads} --eqx --secondary=yes -N 100 -p 0.97 {input.ref} {input.fasta} | samtools view -F 4 -u - | samtools sort - > {output.bam}"
 
 rule recruit_nanopore_reads:
     input:

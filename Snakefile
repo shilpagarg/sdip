@@ -4,9 +4,6 @@
 #include configuration file
 configfile: "config/config.yaml"
 
-#include collection of rules
-include: "workflow/rules/rules.smk"
-
 #Range of regions in regions file that is defined in config file
 all_segdup_regions = range(1, 487)
 
@@ -22,6 +19,9 @@ duplicate_regions = []
 empty_contigs = []
 good_regions = [r for r in filtered_segdup_regions if (not r in big_regions) and (not r in cycle_regions) and (not r in duplicate_regions) and (not r in empty_contigs)]
 
+#include collection of rules
+include: "workflow/rules/rules.smk"
+
 rule all:
     input:
         expand("regions/pngs/r{i}.png", i=good_regions),
@@ -35,14 +35,4 @@ rule all:
         "regions/eval/t5.b5000.d2/tables/polished.grouped.to.hg38.tbl",
         "regions/eval/t5.b5000.d2/tables/polished.grouped.to.bacs.tbl",
         "regions/svim/t5.b5000.d2/contigs.diploid/variants.norm.vcf.gz",
-        "regions/svim/t5.b5000.d2/bacs.haploid/variants.norm.vcf.gz",
-
-        "regions/eval/sda/quast_to_bacs/haploid/report.html",
-        "regions/eval/sda/quast_to_hg38/haploid/report.html",
-        "regions/eval/sda/resolved.haploid/inter.bed",
-        "regions/eval/sda/misassemblies.haploid/confirmed.txt",
-        "regions/eval/sda/tables/qv_sum.haploid.txt",
-        "regions/eval/sda/tables/polished.haploid.to.hg38.tbl",
-        "regions/eval/sda/tables/polished.haploid.to.bacs.tbl",
-        "regions/svim/sda/contigs.haploid/variants.norm.vcf.gz",
-        "regions/svim/sda/bacs.haploid/variants.norm.vcf.gz"
+        "regions/svim/t5.b5000.d2/bacs.haploid/variants.norm.vcf.gz"
