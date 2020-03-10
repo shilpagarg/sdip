@@ -17,21 +17,12 @@ git checkout pipeline
 git submodule update --init
 ```
 
-Most dependencies of SDip are automatically deployed using conda. Two dependencies, however, need to be installed manually. To install svim-asm:
+Most dependencies of SDip are automatically deployed using conda. One dependency, however, needs to be installed manually. To install svim-asm:
 
 ```
 cd path/to/workdir/workflow/bin/svim_asm
-# install using pip, make sure that svim-asm ends up to be in the PATH
-pip install .
-```
-
-The second dependency to install is mc-mpc:
-
-```
-cd path/to/workdir/workflow/bin/MC-MPC/mc-mpc-solver
-# compile mc-mpc
-make
-# add to PATH
+# install using pip
+pip install -t build .
 ```
 
 ## Configuration

@@ -244,7 +244,7 @@ rule compute_path_cover:
     output:
         cover = "regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.cover"
     shell:
-        "mc-mpc {input.lemon} {output.cover}"
+        "workflow/bin/mc-mpc {input.lemon} {output.cover}"
 
 rule cover_statistics:
     input:
@@ -743,7 +743,7 @@ rule svim_call_diploid:
     params:
         working_dir = "regions/svim/{parameters}/contigs.diploid/"
     shell:
-        "svim-asm diploid {params.working_dir} {input.bam1} {input.bam2} {input.genome}"
+        "workflow/bin/svim-asm/build/bin/svim-asm diploid {params.working_dir} {input.bam1} {input.bam2} {input.genome}"
 
 rule svim_call_haploid:
     input:
@@ -755,7 +755,7 @@ rule svim_call_haploid:
     params:
         working_dir = "regions/svim/{parameters}/contigs.haploid/"
     shell:
-        "svim-asm haploid --min_mapq 0 {params.working_dir} {input.bam} {input.genome}"
+        "workflow/bin/svim-asm/build/bin/svim-asm haploid --min_mapq 0 {params.working_dir} {input.bam} {input.genome}"
 
 
 rule svim_call_bacs:
@@ -768,7 +768,7 @@ rule svim_call_bacs:
     params:
         working_dir = "regions/svim/{parameters}/bacs.haploid/"
     shell:
-        "svim-asm haploid --min_mapq 0 {params.working_dir} {input.bam} {input.genome}"
+        "workflow/bin/svim-asm/build/bin/svim-asm haploid --min_mapq 0 {params.working_dir} {input.bam} {input.genome}"
 
 rule normalize_calls:
     input:
