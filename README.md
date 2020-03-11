@@ -13,16 +13,6 @@ git clone https://github.com/shilpagarg/sdip.git path/to/workdir
 cd path/to/workdir
 # switch to branch "pipeline"
 git checkout pipeline
-# Initialize submodules
-git submodule update --init
-```
-
-Most dependencies of SDip are automatically deployed using conda. One dependency, however, needs to be installed manually. To install svim-asm:
-
-```
-cd path/to/workdir/workflow/bin/svim_asm
-# install using pip
-pip install -t build .
 ```
 
 ## Configuration

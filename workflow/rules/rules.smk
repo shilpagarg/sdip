@@ -766,8 +766,10 @@ rule svim_call_diploid:
         "regions/svim/{parameters}/contigs.diploid/variants.vcf"
     params:
         working_dir = "regions/svim/{parameters}/contigs.diploid/"
+    conda:
+        "../envs/svimasm.yaml"
     shell:
-        "workflow/bin/svim-asm/build/bin/svim-asm diploid {params.working_dir} {input.bam1} {input.bam2} {input.genome}"
+        "svim-asm diploid {params.working_dir} {input.bam1} {input.bam2} {input.genome}"
 
 rule svim_call_haploid:
     input:
@@ -778,8 +780,10 @@ rule svim_call_haploid:
         "regions/svim/{parameters}/contigs.haploid/variants.vcf"
     params:
         working_dir = "regions/svim/{parameters}/contigs.haploid/"
+    conda:
+        "../envs/svimasm.yaml"
     shell:
-        "workflow/bin/svim-asm/build/bin/svim-asm haploid --min_mapq 0 {params.working_dir} {input.bam} {input.genome}"
+        "svim-asm haploid --min_mapq 0 {params.working_dir} {input.bam} {input.genome}"
 
 
 rule svim_call_bacs:
@@ -791,8 +795,10 @@ rule svim_call_bacs:
         "regions/svim/{parameters}/bacs.haploid/variants.vcf"
     params:
         working_dir = "regions/svim/{parameters}/bacs.haploid/"
+    conda:
+        "../envs/svimasm.yaml"
     shell:
-        "workflow/bin/svim-asm/build/bin/svim-asm haploid --min_mapq 0 {params.working_dir} {input.bam} {input.genome}"
+        "svim-asm haploid --min_mapq 0 {params.working_dir} {input.bam} {input.genome}"
 
 rule normalize_calls:
     input:

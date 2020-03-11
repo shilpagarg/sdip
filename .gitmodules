@@ -1,3 +1,0 @@
-[submodule "workflow/bin/svim-asm"]
-	path = workflow/bin/svim-asm
-	url = https://github.com/eldariont/svim-asm.git
