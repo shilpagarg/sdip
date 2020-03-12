@@ -2,5 +2,9 @@ channels:
  - bioconda
  - conda-forge
 dependencies:
- - biopython
+ - python>=3.6
+ - numpy
+ - pandas
+ - pysam
  - networkx
+ - biopython

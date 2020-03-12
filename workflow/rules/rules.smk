@@ -232,7 +232,7 @@ rule generate_graph_use_paf:
     #log:
     #    "regions/logs/r{region}.log.gz"
     conda:
-        "../envs/haplotype.yaml"
+        "../envs/python.yaml"
     shell:
         "python workflow/scripts/haplotype.py {input.fasta} -o {params.output} -t {threads} -p {input.paf} 2>/dev/null"
 
@@ -367,6 +367,8 @@ rule compute_identity_table:
         bam = "regions/contigs/alignments.{parameters}/r{region}.bam"
     output:
         tbl = "regions/contigs/alignments.{parameters}/r{region}.tbl"
+    conda:
+        "../envs/python.yaml"
     shell:
         "python workflow/scripts/samIdentity.py --header {input.bam} | awk '$1 != $5' > {output.tbl}"
 
@@ -379,6 +381,8 @@ rule separate_paralogs:
         contigs = "regions/contigs/r{region}.{parameters}.polished.diploid.fa"
     log:
         "regions/logs/merge_haplotypes/r{region}.{parameters}.log"
+    conda:
+        "../envs/python.yaml"
     shell:
         "python workflow/scripts/merge_haplotypes.py --max_similarity 99.95 {input.contigs} {input.tbl} {wildcards.region} 2> {log} > {output.contigs}"
 
