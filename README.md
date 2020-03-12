@@ -6,7 +6,7 @@ We have applied our method to three public human genome assemblies for CHM13, NA
 
 See our preprint here: [https://doi.org/10.1101/2020.02.25.964445](https://doi.org/10.1101/2020.02.25.964445).
 
-This repository contains the complete SDip pipeline and can be used to reproduce all results from our manuscript. 
+This repository contains the complete SDip pipeline and can be used to reproduce the results from our manuscript. 
 
 ## Installation
 
@@ -60,8 +60,19 @@ Also have a look into the [documentation](https://snakemake.readthedocs.io/en/st
 
 ## Results
 
-After the workflow completes, you will find the following output files in your working directory:
+After the workflow completes, you will find the final diploid contigs in `regions/contigs`:
 
-- Final polished contigs: `"<sample_name>/<sample_name>.polished.grouped.fa"`
-- SV calls including genotypes:
-`"<sample_name>/sv_calls_diploid/variants.vcf"`
+- All contigs: `regions/contigs/pooled.t5.b5000.d2.polished.grouped.fa`
+- Contigs from first chromosomal haplotype: `regions/contigs/pooled.t5.b5000.d2.polished.haplotype1.fa`
+- Contigs from second chromosomal haplotype: `regions/contigs/pooled.t5.b5000.d2.polished.haplotype2.fa`
+- Contigs from both chromosomal haplotypes: `regions/contigs/pooled.t5.b5000.d2.polished.diploid.fa`
+- Contigs that could not be matched into haplotype pairs: `regions/contigs/pooled.t5.b5000.d2.polished.haplotype0.fa`
+
+The diploid SV calls detected in alignments of both chromosomal haplotypes to the reference genome can be found here: `regions/svim/t5.b5000.d2/contigs.diploid/variants.norm.vcf`
+
+Evaluation results for the contigs can be found in `regions/eval/t5.b5000.d2`:
+
+- Contig statistics using quast: `regions/eval/t5.b5000.d2/quast_to_bacs/grouped/report.html`
+- QV of contigs versus BACs: `regions/eval/t5.b5000.d2/tables/qv_sum.grouped.txt`
+- Statistics on fully assembled regions (number of covering contigs: count): `regions/eval/t5.b5000.d2/resolved.grouped/stats.txt`
+- List of misassembled contigs: `regions/eval/t5.b5000.d2/misassemblies.grouped/misassembled.txt`
