@@ -1,15 +1,11 @@
-genome:
-    .../assembly.fa
+base: assembly.fa
 
-hg38:
-    .../GCA_000001405.15_GRCh38_no_alt_analysis_set.fa
+hg38: GCA_000001405.15_GRCh38_no_alt_analysis_set.fa
 
-regions:
-	sda: .../coverage/chm13.collapses.bed
+regions: na12878.collapses.bed
 
-reads:
-    pacbio: .../reads.pacbio.fastq
-    nanopore: .../reads.nanopore.fastq
+pacbio: reads.pacbio.fastq
 
-bacs:
-    fasta: .../bacs.fa
+nanopore: reads.nanopore.fastq
+
+bacs: bacs.fa

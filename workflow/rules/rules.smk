@@ -19,8 +19,8 @@ wildcard_constraints:
 
 rule fetch_segdup_sequences:
     input:
-        regions = config["regions"]["sda"],
-        reference = config["genome"]
+        regions = config["regions"],
+        reference = config["base"]
     output:
         "regions/segdups/r{region}.fa"
     conda:
@@ -31,7 +31,7 @@ rule fetch_segdup_sequences:
 rule map_segdup_sequences:
     input:
         fasta = "regions/segdups/r{region}.fa",
-        reference = config["genome"]
+        reference = config["base"]
     output:
         "regions/segdups/r{region}.bam"
     threads: 10
@@ -106,8 +106,8 @@ rule concat_regions:
 
 rule align_pacbio_reads:
     input:
-        ref = config["genome"],
-        fasta = config["reads"]["pacbio"]
+        ref = config["base"],
+        fasta = config["pacbio"]
     output:
         bam = "alignment_pacbio/pooled.sorted.bam"
     threads: 20
@@ -133,8 +133,8 @@ rule recruit_pacbio_reads:
 
 rule align_nanopore_reads:
     input:
-        ref = config["genome"],
-        fasta = config["reads"]["nanopore"]
+        ref = config["base"],
+        fasta = config["nanopore"]
     output:
         bam = "alignment_nanopore/pooled.sorted.bam"
     threads: 20
@@ -170,7 +170,7 @@ rule get_read_names:
 
 rule get_pacbio_fastq:
     input:
-        allreads = config["reads"]["pacbio"],
+        allreads = config["pacbio"],
         names = "regions/reads_pacbio/r{region}.reads"
     output:
         temp("regions/fastas_pacbio/r{region}.fastq")
@@ -181,7 +181,7 @@ rule get_pacbio_fastq:
 
 rule get_nanopore_fastq:
     input:
-        allreads = config["reads"]["nanopore"],
+        allreads = config["nanopore"],
         names = "regions/reads_nanopore/r{region}.reads"
     output:
         temp("regions/fastas_nanopore/r{region}.fastq")
@@ -231,6 +231,8 @@ rule generate_graph_use_paf:
         output = "regions/gfas/r{region}.gfa"
     #log:
     #    "regions/logs/r{region}.log.gz"
+    conda:
+        "../envs/haplotype.yaml"
     shell:
         "python workflow/scripts/haplotype.py {input.fasta} -o {params.output} -t {threads} -p {input.paf} 2>/dev/null"
 
@@ -338,7 +340,7 @@ rule polish_contigs:
         contigs = "regions/contigs/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.fa",
         reads = "regions/polishing/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}/reads.tsv",
         contained_reads = "regions/gfas/r{region}.contained.reads",
-        allreads = config["reads"]["pacbio"]
+        sequences = config["pacbio"]
     output:
         contigs = "regions/contigs/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.fa"
     params:
@@ -467,7 +469,7 @@ rule filter_haplotype0:
 rule map_contigs_to_assembly:
     input:
         fa = "regions/contigs/pooled.{parameters}.polished.{ploidy}.fa",
-        ref = config["genome"]
+        ref = config["base"]
     output:
         "regions/eval/{parameters}/bams/polished.{ploidy}.to.assembly.bam"
     threads: 10
@@ -480,7 +482,7 @@ rule map_contigs_to_assembly:
 rule map_contigs_to_bacs:
     input:
         asm = "regions/contigs/pooled.{parameters}.polished.{ploidy}.fa",
-        bacs = config["bacs"]["fasta"]
+        bacs = config["bacs"]
     output:
         bam = "regions/eval/{parameters}/bams/polished.{ploidy}.to.bacs.bam"
     threads: 10
@@ -493,7 +495,7 @@ rule map_contigs_to_bacs:
 rule map_bacs_to_contigs:
     input:
         asm = "regions/contigs/pooled.{parameters}.polished.{ploidy}.fa",
-        bacs = config["bacs"]["fasta"]
+        bacs = config["bacs"]
     output:
         bam = "regions/eval/{parameters}/bams/bacs.to.polished.{ploidy}.bam"
     threads: 10
@@ -530,8 +532,8 @@ minimap2 -t {threads} --secondary=no -a --eqx -Y -x asm20 \
 
 rule map_bacs_to_assembly:
     input:
-        bacs = config["bacs"]["fasta"],
-        ref = config["genome"]
+        bacs = config["bacs"],
+        ref = config["base"]
     output:
         "regions/eval/bams/bacs.to.assembly.bam"
     threads: 10
@@ -544,7 +546,7 @@ rule map_bacs_to_assembly:
 rule map_bacs_to_hg38:
     input:
         hg38 = config["hg38"], 
-        bacs = config["bacs"]["fasta"],
+        bacs = config["bacs"],
     output:
         bam = "regions/eval/bams/bacs.to.hg38.bam"
     threads: 10
@@ -563,7 +565,7 @@ minimap2 -t {threads} --secondary=no -a -Y -x asm20 \
 rule quast_to_assembly:
     input:
         fa = "regions/contigs/pooled.{parameters}.polished.{ploidy}.fa",
-        ref = config["genome"]
+        ref = config["base"]
     output:
         "regions/eval/{parameters}/quast_to_assembly/{ploidy}/report.html"
     params:
@@ -576,7 +578,7 @@ rule quast_to_assembly:
 rule quast_to_bacs:
     input:
         fa = "regions/contigs/pooled.{parameters}.polished.{ploidy}.fa",
-        ref = config["bacs"]["fasta"]
+        ref = config["bacs"]
     output:
         "regions/eval/{parameters}/quast_to_bacs/{ploidy}/report.html"
     params:
@@ -612,7 +614,7 @@ rule bam_to_bed:
 rule overlap_alignments_with_regions:
     input:
         bed = "regions/eval/{parameters}/bams/polished.{ploidy}.to.assembly.bed",
-        regions = config["regions"]["sda"]
+        regions = config["regions"]
     output:
         inter = "regions/eval/{parameters}/resolved.{ploidy}/inter.bed"
     shell:
@@ -620,9 +622,9 @@ rule overlap_alignments_with_regions:
 
 rule count_resolved_segdup_regions_assembly:
     input:
-        regions = config["regions"]["sda"],
+        regions = config["regions"],
         inter = "regions/eval/{parameters}/resolved.{ploidy}/inter.bed",
-        index = config["genome"] + ".fai"
+        index = config["base"] + ".fai"
     output:
         stats = "regions/eval/{parameters}/resolved.{ploidy}/stats.txt",
         status_list = "regions/eval/{parameters}/resolved.{ploidy}/list.tbl",
