@@ -26,7 +26,7 @@ cd path/to/workdir
 Now that SDip is installed, you need to customize the configuration script under `config/config.yaml` for your base assembly. In particular, the following input files need to be specified:
 
 * **base**: the base assembly whose collapsed regions shall be assembled 
-* **hg38**: the reference genome used for evaluation (e.g. from [here](http://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz)
+* **hg38**: the reference genome used for evaluation (e.g. from [here](http://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz))
 * **regions**: bed file of collapsed regions in base assembly (e.g. from SDA)
 * **pacbio**: FASTA file of PacBio HiFi reads
 * **nanopore**: FASTA file of Ultralong Nanopore reads
@@ -74,3 +74,8 @@ Evaluation results for the contigs can be found in `regions/eval/t5.b5000.d2`:
 - QV of contigs versus BACs: `regions/eval/t5.b5000.d2/tables/qv_sum.grouped.txt`
 - Statistics on fully assembled regions (number of covering contigs: count): `regions/eval/t5.b5000.d2/resolved.grouped/stats.txt`
 - List of misassembled contigs: `regions/eval/t5.b5000.d2/misassemblies.grouped/misassembled.txt`
+
+
+## Contact
+
+If you experience problems or have suggestions please create an issue or a pull request or contact heller_d@molgen.mpg.de.
