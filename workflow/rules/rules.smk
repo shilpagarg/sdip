@@ -531,7 +531,7 @@ rule map_contigs_to_hg38:
     shell:"""
 minimap2 -t {threads} --secondary=no -a --eqx -Y -x asm20 \
     -m 10000 -z 10000,50 -r 50000 --end-bonus=100 -O 5,56 -E 4,1 -B 5 \
-     {input.hg38} {input.asm} | samtools view -F 260 -u - | samtools sort -@ {threads} - > {output.bam}
+     {input.hg38} {input.asm} | samtools view -F 2308 -u - | samtools sort -@ {threads} - > {output.bam}
 """
 
 rule map_bacs_to_assembly:
@@ -695,6 +695,8 @@ rule bacs_to_contigs_tbl:
         bam = "regions/eval/{parameters}/bams/bacs.to.polished.{ploidy}.bam"
     output:
         tbl = "regions/eval/{parameters}/tables/bacs.to.polished.{ploidy}.tbl"
+    conda:
+        "../envs/python.yaml"
     shell:
         "python workflow/scripts/samIdentity.py --header {input.bam} > {output.tbl}"
 
@@ -704,15 +706,17 @@ rule contigs_to_hg38_tbl:
     output:
         tbl = "regions/eval/{parameters}/tables/polished.{ploidy}.to.hg38.tbl"
     conda:
-        "../envs/samtools.yaml"
+        "../envs/python.yaml"
     shell:
-        "python workflow/scripts/samIdentity.py --header <(samtools view -h -F 2308 {input.bam}) > {output.tbl}"
+        "python workflow/scripts/samIdentity.py --header {input.bam} > {output.tbl}"
 
 rule contigs_to_bacs_tbl:
     input:
         bam = "regions/eval/{parameters}/bams/polished.{ploidy}.to.bacs.bam"
     output:
         tbl = "regions/eval/{parameters}/tables/polished.{ploidy}.to.bacs.tbl"
+    conda:
+        "../envs/python.yaml"
     shell:
         "python workflow/scripts/samIdentity.py --header {input.bam} > {output.tbl}"
 
