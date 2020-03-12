@@ -19,8 +19,6 @@ SDip has been implemented as a [snakemake](https://snakemake.readthedocs.io) pip
 # clone workflow into working directory
 git clone https://github.com/shilpagarg/sdip.git path/to/workdir
 cd path/to/workdir
-# switch to branch "pipeline"
-git checkout pipeline
 ```
 
 ## Configuration
