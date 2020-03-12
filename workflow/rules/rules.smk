@@ -60,6 +60,8 @@ rule generate_graph_use_paf:
         output = "{sample}/{sample}.gfa"
     #log:
     #    "regions/logs/r{region}.log.gz"
+    conda:
+        "../envs/python.yaml"
     shell:
         "python3 workflow/scripts/haplotype.py {input.fasta} -o {params.output} -t {threads} -p {input.paf} 2>/dev/null"
 
@@ -102,7 +104,7 @@ rule compute_path_cover:
     output:
         cover = "{sample}/{sample}.reducted.pruned.cover"
     shell:
-        "mc-mpc {input.lemon} {output.cover}"
+        "workflow/bin/mc-mpc {input.lemon} {output.cover}"
 
 rule ul_align_to_graph:
     input:
@@ -169,6 +171,8 @@ rule compute_identity_table:
         bam = "{sample}/{sample}.polished.selfaln.bam"
     output:
         tbl = "{sample}/{sample}.polished.selfaln.tbl"
+    conda:
+        "../envs/python.yaml"
     shell:
         "python3 workflow/scripts/samIdentity.py --header {input.bam} | awk '$1 != $5' > {output.tbl}" 
 
@@ -181,6 +185,8 @@ rule separate_paralogs:
         contigs = "{sample}/{sample}.polished.grouped.fa"
     log:
         "logs/{sample}/merge_haplotypes/{sample}.log"
+    conda:
+        "../envs/python.yaml"
     shell:
         "python3 workflow/scripts/merge_haplotypes.py --max_similarity 99.95 {input.contigs} {input.tbl} {wildcards.sample} 2> {log} > {output.contigs}"
 
@@ -256,6 +262,8 @@ rule svim_call_diploid:
         "{sample}/sv_calls_diploid/variants.vcf"
     params:
         working_dir = "{sample}/sv_calls_diploid/"
+    conda:
+        "../envs/svimasm.yaml"
     shell:
         "svim-asm diploid {params.working_dir} {input.bam1} {input.bam2} {input.ref}"
 
@@ -268,5 +276,7 @@ rule svim_call_haploid:
         "{sample}/sv_calls_haploid/variants.vcf"
     params:
         working_dir = "{sample}/sv_calls_haploid/"
+    conda:
+        "../envs/svimasm.yaml"
     shell:
         "svim-asm haploid --min_mapq 0 {params.working_dir} {input.bam} {input.ref}"

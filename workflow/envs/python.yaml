@@ -1,0 +1,10 @@
+channels:
+ - bioconda
+ - conda-forge
+dependencies:
+ - python>=3.6
+ - numpy
+ - pandas
+ - pysam
+ - networkx
+ - biopython
