@@ -6,7 +6,7 @@ We have applied our method to three public human genome assemblies for CHM13, NA
 
 See our preprint here: [https://doi.org/10.1101/2020.02.25.964445](https://doi.org/10.1101/2020.02.25.964445).
 
-This repository contains the complete SDip pipeline and can be used to reproduce the results from our manuscript. 
+**This branch of the repository (`master`) contains the complete SDip pipeline and can be used to reproduce the results from our manuscript. For the SDip tool which can be used to generate diploid contigs and SV calls from your own custom set of PacBio HiFi and Ultralong Nanopore reads, change to the [`tool`](https://github.com/shilpagarg/sdip/tree/tool) branch.**
 
 ## Installation
 
