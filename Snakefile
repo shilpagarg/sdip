@@ -48,7 +48,7 @@ rule all:
         "regions/stats/stats.t5.b5000.d2.txt",
         expand("regions/eval/t5.b5000.d2/quast_to_bacs/{variant}/report.html", variant=["grouped", "haplotype1", "haplotype2"]),
         expand("regions/eval/t5.b5000.d2/quast_to_hg38/{variant}/report.html", variant=["grouped", "haplotype1", "haplotype2"]),
-        "regions/eval/t5.b5000.d2/resolved.grouped/inter.bed",
+        "regions/eval/t5.b5000.d2/resolved.grouped/resolved.txt",
         "regions/eval/t5.b5000.d2/misassemblies.grouped/confirmed.txt",
         "regions/eval/t5.b5000.d2/tables/qv_sum.grouped.txt",
         "regions/eval/t5.b5000.d2/tables/polished.grouped.to.hg38.tbl",
