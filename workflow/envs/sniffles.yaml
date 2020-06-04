@@ -1,0 +1,4 @@
+channels:
+ - bioconda
+dependencies:
+ - sniffles=1.0.11
