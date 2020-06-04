@@ -1,4 +1,4 @@
 channels:
  - bioconda
 dependencies:
- - graphaligner
+ - graphaligner=1.0.8

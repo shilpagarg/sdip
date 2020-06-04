@@ -41,6 +41,7 @@ else:
     #Add contained reads
     with open(snakemake.input["contained_reads"], 'r') as contained_file:
         for num in range(1, num_haps + 1):
+            contained_file.seek(0)
             for line in contained_file:
                 fields = line.strip().split()
                 if fields[1] in reads[num]:
@@ -61,7 +62,7 @@ else:
             subprocess.run(["minimap2", "-ax", "map-pb", "-t4", contig_path, fasta_path], stdout = outfile)
         consensus_path = snakemake.params["wd"] + "consensus%d.fa" % (num)
         with open(consensus_path, "w") as outfile:
-            subprocess.run(["racon", "-t", str(snakemake.threads), "-u", fasta_path, sam_path, contig_path], stdout = outfile)
+            subprocess.run(["racon", "--no-trimming", "-t", str(snakemake.threads), "-u", fasta_path, sam_path, contig_path], stdout = outfile)
     
     #Concat polished contigs
     with open(snakemake.output["contigs"], "w") as outfile:
