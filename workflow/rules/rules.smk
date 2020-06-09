@@ -30,62 +30,6 @@ rule align_pacbio_reads:
     shell:
         "minimap2 -a -k 19 -O 5,56 -E 4,1 -B 5 -z 400,50 -r 2k -t {threads} --eqx --MD --secondary=no {input.ref} {input.fasta} | samtools view -F 4 -u - | samtools sort - > {output.bam}"
 
-rule align_nanopore_reads:
-    input:
-        ref = config["hg38"],
-        fasta = config["nanopore"]
-    output:
-        bam = "pipeline/alignment_nanopore/pooled.sorted.bam"
-    threads: 20
-    conda:
-        "../envs/minimap.yaml"
-    shell:
-        "minimap2 -aL -z 600,200 -x map-ont -t {threads} --eqx --secondary=yes -N 100 -p 0.97 {input.ref} {input.fasta} | samtools view -F 4 -u - | samtools sort - > {output.bam}"
-
-rule align_long_nanopore_reads:
-    input:
-        ref = config["hg38"],
-        fasta = config["nanopore"]
-    output:
-        bam = "pipeline/alignment_nanopore/pooled.long.sorted.bam"
-    threads: 20
-    conda:
-        "../envs/minimap.yaml"
-    shell:
-        "/project/pacbiosv/bin/bioawk/bioawk -c fastx  '{{ if(length($seq) > 100000){{ print \"@\"$name; print $seq; print \"+\"$comment; print $qual }} }}' {input.fasta} | \
-         minimap2 -aL -z 600,200 -x map-ont -t {threads} --eqx --MD --secondary=yes -N 100 -p 0.97 {input.ref} - | samtools view -F 4 -u - | samtools sort - > {output.bam}"
-
-rule map_bacs_to_hg38:
-    input:
-        hg38 = config["hg38"], 
-        bacs = config["bacs"],
-    output:
-        bam = "pipeline/alignment_bacs/bacs.sorted.bam"
-    threads: 10
-    conda:
-        "../envs/minimap.yaml"
-    shell:"""
-minimap2 -t {threads} --secondary=no -a -Y -x asm20 \
-    -m 10000 -z 10000,50 -r 50000 --end-bonus=100 -O 5,56 -E 4,1 -B 5 \
-     {input.hg38} {input.bacs} | samtools view -F 260 -u - | samtools sort -@ {threads} - > {output.bam}
-"""
-
-rule bam_to_bed:
-    input:
-        bam = "{name}.bam"
-    output:
-        bed = "{name}.bed"
-    shell:
-        "bedtools bamtobed -i {input.bam} > {output.bed}"
-
-rule bedtools_merge:
-    input:
-        bed = "{name}.bed"
-    output:
-        bed = "{name}.merged.bed"
-    shell:
-        "bedtools merge -i {input.bed} > {output.bed}"
-
 rule index_bam:
     input:
         "{name}.bam"
@@ -110,7 +54,7 @@ rule sniffles_call_pacbio_reads:
     conda:
         "../envs/sniffles.yaml"
     shell:
-        "sniffles --mapped_reads {input.bam} --min_length 40 --min_support {wildcards.min_support} --vcf {output} --threads 1"
+        "sniffles --mapped_reads {input.bam} --min_length 40 --min_support {wildcards.min_support} --genotype --vcf {output} --threads 1"
 
 #see https://github.com/spiralgenetics/truvari/issues/43
 rule fix_sniffles_pacbio_reads:
@@ -121,46 +65,21 @@ rule fix_sniffles_pacbio_reads:
     shell:
         "sed 's/##INFO=<ID=SUPTYPE,Number=A/##INFO=<ID=SUPTYPE,Number=./' {input} > {output}"
 
-#Run svim-asm on Bacs
-rule svim_call_bacs:
-    input:
-        bam =  "pipeline/alignment_bacs/bacs.sorted.bam",
-        bai =  "pipeline/alignment_bacs/bacs.sorted.bam.bai",
-        genome = config["hg38"]
-    output:
-        "pipeline/calls/bacs/variants.vcf"
-    params:
-        working_dir = "pipeline/calls/bacs/"
-    shell:
-        "/home/heller_d/bin/anaconda3/bin/svim-asm haploid --min_sv_size 40 --min_mapq 0 {params.working_dir} {input.bam} {input.genome}"
-
-rule sniffles_call_nanopore_reads:
-    input:
-        bam = "pipeline/alignment_nanopore/pooled.long.sorted.bam",
-        bai = "pipeline/alignment_nanopore/pooled.long.sorted.bam.bai"
-    output:
-        "pipeline/calls/ul_ont/raw_{min_support}.vcf"
-    conda:
-        "../envs/sniffles.yaml"
-    shell:
-        "sniffles --mapped_reads {input.bam} --min_length 40 --min_support {wildcards.min_support} --vcf {output} --threads 1"
-
-#see https://github.com/spiralgenetics/truvari/issues/43
-rule fix_sniffles_ont_reads:
-    input:
-        "pipeline/calls/ul_ont/raw_{min_support}.vcf"
-    output:
-        "pipeline/calls/ul_ont/min_{min_support,[0-9]+}.vcf"
-    shell:
-        "sed 's/##INFO=<ID=SUPTYPE,Number=A/##INFO=<ID=SUPTYPE,Number=./' {input} > {output}"
-
 ###############
 #Recruit reads#
 ###############
 
+rule get_regions:
+    input:
+        ref = config["hg38"] + ".fai"
+    output:
+        bed = config["hg38"] + ".bed"
+    shell:
+        "awk '{{print $1, \"1\", $2}}' {input} > {output}"
+
 rule recruit_pacbio_reads:
     input:
-        regions = "pipeline/alignment_bacs/bacs.sorted.merged.bed",
+        regions = config["hg38"] + ".bed",
         bam = "pipeline/alignment_pacbio/pooled.sorted.bam",
         index = "pipeline/alignment_pacbio/pooled.sorted.bam.bai"
     output:
@@ -173,21 +92,6 @@ rule recruit_pacbio_reads:
     shell:
         "reg=`awk '{{if (NR=={wildcards.region}) {{ print $1\":\"$2\"-\"$3 }} }}' {input.regions}`; samtools view -b -@ {threads} -F 256 -q {params.primary_mapq_threshold} {input.bam} ${{reg}} > {output}"
 
-
-rule recruit_nanopore_reads:
-    input:
-        regions = "pipeline/alignment_bacs/bacs.sorted.merged.bed",
-        bam = "pipeline/alignment_nanopore/pooled.sorted.bam",
-        index = "pipeline/alignment_nanopore/pooled.sorted.bam.bai"
-    output:
-        "pipeline/regions/bams_nanopore/r{region}.bam"
-    params:
-        primary_mapq_threshold = 30
-    threads: 5
-    conda:
-        "../envs/samtools.yaml"
-    shell:
-        "reg=`awk '{{if (NR=={wildcards.region}) {{ print $1\":\"$2\"-\"$3 }} }}' {input.regions}`; samtools view -b -@ {threads} -F 256 -q {params.primary_mapq_threshold} {input.bam} ${{reg}} > {output}"
 
 rule get_read_names:
     input:
@@ -205,17 +109,6 @@ rule get_pacbio_fastq:
         names = "pipeline/regions/reads_pacbio/r{region}.reads"
     output:
         temp("pipeline/regions/fastas_pacbio/r{region}.fastq")
-    conda:
-        "../envs/samtools.yaml"
-    shell:
-        "LINES=$(wc -l < {input.names}) ; if [ $LINES -lt 20000 ] && [ $LINES -gt 0 ]; then samtools faidx -f -r {input.names} {input.allreads} > {output}; else echo '' > {output}; fi"
-
-rule get_nanopore_fastq:
-    input:
-        allreads = config["nanopore"],
-        names = "pipeline/regions/reads_nanopore/r{region}.reads"
-    output:
-        temp("pipeline/regions/fastas_nanopore/r{region}.fastq")
     conda:
         "../envs/samtools.yaml"
     shell:
@@ -338,23 +231,9 @@ rule cover_statistics:
             for k in range(len(input["covers"])):
                 print("%d\t%d\t%d" % (k+1, max_covers[k], component_numbers[k]), file=output_file)
 
-rule ul_align_to_graph:
-    input:
-        graph = "pipeline/regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.gfa",
-        nano = "pipeline/regions/fastas_nanopore/r{region}.fasta"
-    output:
-        aln = "pipeline/regions/jsons/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.json"
-    log: "pipeline/regions/logs/nanopore_alignment/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.log"
-    threads: 5
-    conda:
-        "../envs/graphaligner.yaml"
-    shell:
-        "GraphAligner -g {input.graph} -f {input.nano} -t {threads} --seeds-mum-count 30000 -a {output.aln} --seeds-mxm-length 10 -b 35 1>{log} 2>&1"
-
 rule extract_contigs_from_cover:
     input:
         gfa = "pipeline/regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.gfa",
-        json = "pipeline/regions/jsons/r{region}.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.json",
         lemon = "pipeline/regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.lemon",
         table = "pipeline/regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.tbl",
         cover = "pipeline/regions/gfas/pruned/r{region}.reducted.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.cover"
@@ -364,7 +243,7 @@ rule extract_contigs_from_cover:
     params:
         prefix = "r{region}"
     shell:
-        "python workflow/scripts/contigs_from_nanopore_cover.py --prefix {params.prefix} {input.gfa} {input.lemon} {input.table} {input.cover} --json {input.json} --paths {output.reads} > {output.contigs}"
+        "python workflow/scripts/contigs_from_nanopore_cover.py --prefix {params.prefix} {input.gfa} {input.lemon} {input.table} {input.cover} --paths {output.reads} > {output.contigs}"
 
 rule polish_contigs:
     input:
@@ -415,7 +294,7 @@ rule separate_paralogs:
     conda:
         "../envs/python.yaml"
     shell:
-        "python workflow/scripts/merge_haplotypes.py --max_similarity 99.95 {input.contigs} {input.tbl} {wildcards.region} 2> {log} > {output.contigs}"
+        "python workflow/scripts/merge_haplotypes.py --max_similarity 99.99 {input.contigs} {input.tbl} {wildcards.region} 2> {log} > {output.contigs}"
 
 rule faidx:
     input:
@@ -438,6 +317,40 @@ rule remove_duplicates_haploid:
         "pipeline/regions/logs/merge_haplotypes/r{region}.{parameters}.log"
     shell:
         "python workflow/scripts/merge_haplotypes.py --haploid --max_similarity 99.95 {input.contigs} {input.tbl} {wildcards.region} 2> {log} > {output.contigs}"
+
+rule pool_contigs_diploid:
+    input:
+        expand("pipeline/regions/contigs/r{i}.t{{tip_max_size}}.b{{bubble_max_size}}.d{{degree_max_size}}.polished.diploid.fa", i=good_regions)
+    output:
+        "pipeline/regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.diploid.fa"
+    shell:
+        "cat {input} > {output}"
+
+rule split_to_diploid:
+    input:
+        fa = "pipeline/regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.diploid.fa",
+        fai = "pipeline/regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.diploid.fa.fai"
+    output:
+        #h0 = "pipeline/regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.haplotype0.fa",
+        h1 = "pipeline/regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.haplotype1.fa",
+        h2 = "pipeline/regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.haplotype2.fa"
+    conda:
+        "../envs/samtools.yaml"
+    shell:
+        """samtools faidx -r <(cat {input.fai} | cut -f 1 | grep \"_haplotype0\") {input.fa} > {output.h1} &&
+           samtools faidx -r <(cat {input.fai} | cut -f 1 | grep \"_haplotype1\") {input.fa} >> {output.h1} &&
+           samtools faidx -r <(cat {input.fai} | cut -f 1 | grep \"_haplotype2\") {input.fa} > {output.h2}"""
+
+# rule filter_haplotype0:
+#     input:
+#         fa = "pipeline/regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.grouped.fa",
+#         fai = "pipeline/regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.grouped.fa.fai"
+#     output:
+#         fa = "pipeline/regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.diploid.fa",
+#     conda:
+#         "../envs/samtools.yaml"
+#     shell:
+#         "samtools faidx -r <(cat {input.fai} | cut -f 1 | grep -v \"_haplotype0\") {input.fa} > {output.fa}"
 
 rule pool_contigs_haploid:
     input:
@@ -465,16 +378,29 @@ minimap2 -t {threads} --secondary=no -a --eqx -Y -x asm20 \
 #Run svim-asm on contigs
 rule svim_call_sdip:
     input:
-        bam =  "pipeline/alignment_contigs/contigs.{parameters}.{ploidy}.sorted.bam",
-        bai =  "pipeline/alignment_contigs/contigs.{parameters}.{ploidy}.sorted.bam.bai",
+        bam =  "pipeline/alignment_contigs/contigs.{parameters}.haploid.sorted.bam",
+        bai =  "pipeline/alignment_contigs/contigs.{parameters}.haploid.sorted.bam.bai",
         genome = config["hg38"]
     output:
-        "pipeline/calls/contigs.{parameters}.{ploidy}.{mapq}/variants.vcf"
+        "pipeline/calls/contigs.{parameters}.haploid.{mapq}/variants.vcf"
     params:
-        working_dir = "pipeline/calls/contigs.{parameters}.{ploidy}.{mapq}/"
+        working_dir = "pipeline/calls/contigs.{parameters}.haploid.{mapq}/"
     shell:
         "/home/heller_d/bin/anaconda3/bin/svim-asm haploid --min_sv_size 40 --min_mapq {wildcards.mapq} {params.working_dir} {input.bam} {input.genome}"
 
+rule svim_call_diploid:
+    input:
+        bam1 =  "pipeline/alignment_contigs/contigs.{parameters}.haplotype1.sorted.bam",
+        bam2 =  "pipeline/alignment_contigs/contigs.{parameters}.haplotype2.sorted.bam",
+        bai1 =  "pipeline/alignment_contigs/contigs.{parameters}.haplotype1.sorted.bam.bai",
+        bai2 =  "pipeline/alignment_contigs/contigs.{parameters}.haplotype2.sorted.bam.bai",
+        genome = config["hg38"]
+    output:
+        "pipeline/calls/contigs.{parameters}.diploid.{mapq}/variants.vcf"
+    params:
+        working_dir = "pipeline/calls/contigs.{parameters}.diploid.{mapq}/"
+    shell:
+        "/home/heller_d/bin/anaconda3/bin/svim-asm diploid --min_sv_size 40 --min_mapq {wildcards.mapq} {params.working_dir} {input.bam1} {input.bam2} {input.genome}"
 
 ############
 # Eval SVs #
@@ -506,120 +432,110 @@ rule tabix_calls:
     shell:
         "tabix -p vcf {input}"
 
-rule truvari_to_bacs_sniffles:
+rule truvari_sniffles:
     input:
         reference = config["hg38"],
-        truth = "pipeline/calls/bacs/variants.filtered.dedup.vcf.gz",
-        truth_index = "pipeline/calls/bacs/variants.filtered.dedup.vcf.gz.tbi",
-        regions = "pipeline/alignment_bacs/bacs.sorted.merged.bed",
+        truth = config["truth"],
+        truth_index = config["truth"] + ".tbi",
         calls = "pipeline/calls/sniffles/min_{min_support}.filtered.vcf.gz",
         calls_index = "pipeline/calls/sniffles/min_{min_support}.filtered.vcf.gz.tbi"
     output:
-        "pipeline/truvari_to_bacs/sniffles/{min_support}/summary.txt",
-        "pipeline/truvari_to_bacs/sniffles/{min_support}/tp-call.vcf",
-        "pipeline/truvari_to_bacs/sniffles/{min_support}/tp-base.vcf",
-        "pipeline/truvari_to_bacs/sniffles/{min_support}/fp.vcf",
-        "pipeline/truvari_to_bacs/sniffles/{min_support}/fn.vcf"
+        "pipeline/truvari/sniffles/{min_support}/summary.txt",
+        "pipeline/truvari/sniffles/{min_support}/tp-call.vcf",
+        "pipeline/truvari/sniffles/{min_support}/tp-base.vcf",
+        "pipeline/truvari/sniffles/{min_support}/fp.vcf",
+        "pipeline/truvari/sniffles/{min_support}/fn.vcf"
     params:
-        out_dir = "pipeline/truvari_to_bacs/sniffles/{min_support}"
+        out_dir = "pipeline/truvari/sniffles/{min_support}"
     conda:
         "../envs/truvari.yaml"
     shell:
         """rm -rf {params.out_dir} && \
         truvari -f {input.reference} \
                 -b {input.truth} \
-                --includebed {input.regions} \
                 -o {params.out_dir} \
-                --passonly \
                 -r 1000 \
                 -p 0.00 \
                 -c {input.calls}"""
 
-rule truvari_to_ont_sniffles:
+rule truvari_sdip:
     input:
         reference = config["hg38"],
-        truth = "pipeline/calls/ul_ont/min_10.filtered.dedup.vcf.gz",
-        truth_index = "pipeline/calls/ul_ont/min_10.filtered.dedup.vcf.gz.tbi",
-        regions = "pipeline/alignment_bacs/bacs.sorted.merged.bed",
+        truth = config["truth"],
+        truth_index = config["truth"] + ".tbi",
+        calls = "pipeline/calls/contigs.{parameters}.{ploidy}.{mapq}/variants.filtered.vcf.gz",
+        calls_index = "pipeline/calls/contigs.{parameters}.{ploidy}.{mapq}/variants.filtered.vcf.gz.tbi"
+    output:
+        "pipeline/truvari/sdip/{parameters}.{ploidy}.{mapq}/summary.txt",
+        "pipeline/truvari/sdip/{parameters}.{ploidy}.{mapq}/tp-call.vcf",
+        "pipeline/truvari/sdip/{parameters}.{ploidy}.{mapq}/tp-base.vcf",
+        "pipeline/truvari/sdip/{parameters}.{ploidy}.{mapq}/fp.vcf",
+        "pipeline/truvari/sdip/{parameters}.{ploidy}.{mapq}/fn.vcf"
+    params:
+        out_dir = "pipeline/truvari/sdip/{parameters}.{ploidy}.{mapq}"
+    conda:
+        "../envs/truvari.yaml"
+    shell:
+        """rm -rf {params.out_dir} && \
+        truvari -f {input.reference} \
+                -b {input.truth} \
+                -o {params.out_dir} \
+                -r 1000 \
+                -p 0.00 \
+                -c {input.calls}"""
+
+rule truvari_gt_sniffles:
+    input:
+        reference = config["hg38"],
+        truth = config["truth"],
+        truth_index = config["truth"] + ".tbi",
         calls = "pipeline/calls/sniffles/min_{min_support}.filtered.vcf.gz",
         calls_index = "pipeline/calls/sniffles/min_{min_support}.filtered.vcf.gz.tbi"
     output:
-        "pipeline/truvari_to_ont/sniffles/{min_support}/summary.txt",
-        "pipeline/truvari_to_ont/sniffles/{min_support}/tp-call.vcf",
-        "pipeline/truvari_to_ont/sniffles/{min_support}/tp-base.vcf",
-        "pipeline/truvari_to_ont/sniffles/{min_support}/fp.vcf",
-        "pipeline/truvari_to_ont/sniffles/{min_support}/fn.vcf"
+        "pipeline/truvari_gt/sniffles/{min_support}/summary.txt",
+        "pipeline/truvari_gt/sniffles/{min_support}/tp-call.vcf",
+        "pipeline/truvari_gt/sniffles/{min_support}/tp-base.vcf",
+        "pipeline/truvari_gt/sniffles/{min_support}/fp.vcf",
+        "pipeline/truvari_gt/sniffles/{min_support}/fn.vcf"
     params:
-        out_dir = "pipeline/truvari_to_ont/sniffles/{min_support}"
+        out_dir = "pipeline/truvari_gt/sniffles/{min_support}"
     conda:
         "../envs/truvari.yaml"
     shell:
         """rm -rf {params.out_dir} && \
         truvari -f {input.reference} \
                 -b {input.truth} \
-                --includebed {input.regions} \
                 -o {params.out_dir} \
-                --passonly \
                 -r 1000 \
                 -p 0.00 \
+                --gtcomp \
                 -c {input.calls}"""
 
-rule truvari_to_bacs_sdip:
+rule truvari_gt_sdip:
     input:
         reference = config["hg38"],
-        truth = "pipeline/calls/bacs/variants.filtered.dedup.vcf.gz",
-        truth_index = "pipeline/calls/bacs/variants.filtered.dedup.vcf.gz.tbi",
-        regions = "pipeline/alignment_bacs/bacs.sorted.merged.bed",
+        truth = config["truth"],
+        truth_index = config["truth"] + ".tbi",
         calls = "pipeline/calls/contigs.{parameters}.{ploidy}.{mapq}/variants.filtered.vcf.gz",
         calls_index = "pipeline/calls/contigs.{parameters}.{ploidy}.{mapq}/variants.filtered.vcf.gz.tbi"
     output:
-        "pipeline/truvari_to_bacs/sdip/{parameters}.{ploidy}.{mapq}/summary.txt",
-        "pipeline/truvari_to_bacs/sdip/{parameters}.{ploidy}.{mapq}/tp-call.vcf",
-        "pipeline/truvari_to_bacs/sdip/{parameters}.{ploidy}.{mapq}/tp-base.vcf",
-        "pipeline/truvari_to_bacs/sdip/{parameters}.{ploidy}.{mapq}/fp.vcf",
-        "pipeline/truvari_to_bacs/sdip/{parameters}.{ploidy}.{mapq}/fn.vcf"
+        "pipeline/truvari_gt/sdip/{parameters}.{ploidy}.{mapq}/summary.txt",
+        "pipeline/truvari_gt/sdip/{parameters}.{ploidy}.{mapq}/tp-call.vcf",
+        "pipeline/truvari_gt/sdip/{parameters}.{ploidy}.{mapq}/tp-base.vcf",
+        "pipeline/truvari_gt/sdip/{parameters}.{ploidy}.{mapq}/fp.vcf",
+        "pipeline/truvari_gt/sdip/{parameters}.{ploidy}.{mapq}/fn.vcf"
     params:
-        out_dir = "pipeline/truvari_to_bacs/sdip/{parameters}.{ploidy}.{mapq}"
+        out_dir = "pipeline/truvari_gt/sdip/{parameters}.{ploidy}.{mapq}"
     conda:
         "../envs/truvari.yaml"
     shell:
         """rm -rf {params.out_dir} && \
         truvari -f {input.reference} \
                 -b {input.truth} \
-                --includebed {input.regions} \
                 -o {params.out_dir} \
-                --passonly \
                 -r 1000 \
                 -p 0.00 \
-                -c {input.calls}"""
-
-rule truvari_to_ont_sdip:
-    input:
-        reference = config["hg38"],
-        truth = "pipeline/calls/ul_ont/min_10.filtered.dedup.vcf.gz",
-        truth_index = "pipeline/calls/ul_ont/min_10.filtered.dedup.vcf.gz.tbi",
-        regions = "pipeline/alignment_bacs/bacs.sorted.merged.bed",
-        calls = "pipeline/calls/contigs.{parameters}.{ploidy}.{mapq}/variants.filtered.vcf.gz",
-        calls_index = "pipeline/calls/contigs.{parameters}.{ploidy}.{mapq}/variants.filtered.vcf.gz.tbi"
-    output:
-        "pipeline/truvari_to_ont/sdip/{parameters}.{ploidy}.{mapq}/summary.txt",
-        "pipeline/truvari_to_ont/sdip/{parameters}.{ploidy}.{mapq}/tp-call.vcf",
-        "pipeline/truvari_to_ont/sdip/{parameters}.{ploidy}.{mapq}/tp-base.vcf",
-        "pipeline/truvari_to_ont/sdip/{parameters}.{ploidy}.{mapq}/fp.vcf",
-        "pipeline/truvari_to_ont/sdip/{parameters}.{ploidy}.{mapq}/fn.vcf"
-    params:
-        out_dir = "pipeline/truvari_to_ont/sdip/{parameters}.{ploidy}.{mapq}"
-    conda:
-        "../envs/truvari.yaml"
-    shell:
-        """rm -rf {params.out_dir} && \
-        truvari -f {input.reference} \
-                -b {input.truth} \
-                --includebed {input.regions} \
-                -o {params.out_dir} \
-                --passonly \
-                -r 1000 \
-                -p 0.00 \
+                --gtcomp \
                 -c {input.calls}"""
 
 rule reformat_truvari_results:
@@ -635,7 +551,7 @@ rule cat_truvari_results:
     input:
         sniffles = expand("pipeline/{{truvari}}/sniffles/{threshold}/pr_rec.txt", 
                           threshold = [1, 4, 7, 10]),
-        sdip = expand("pipeline/{{truvari}}/sdip/t5.b5000.d2.haploid.{mapq}/pr_rec.txt",
+        sdip = expand("pipeline/{{truvari}}/sdip/t5.b5000.d2.diploid.{mapq}/pr_rec.txt",
                        mapq = [0, 30, 50, 60])
     output:
         all = "pipeline/eval/{truvari}/all_results.txt"
@@ -761,48 +677,6 @@ rule plot_pr_tools:
 #############
 #Map contigs#
 #############
-
-# rule pool_contigs_diploid:
-#     input:
-#         expand("regions/contigs/r{i}.t{{tip_max_size}}.b{{bubble_max_size}}.d{{degree_max_size}}.polished.diploid.fa", i=good_regions)
-#     output:
-#         "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.grouped.fa"
-#     shell:
-#         "cat {input} > {output}"
-
-# rule pool_contigs_haploid:
-#     input:
-#         expand("regions/contigs/r{i}.t{{tip_max_size}}.b{{bubble_max_size}}.d{{degree_max_size}}.polished.haploid.fa", i=good_regions)
-#     output:
-#         "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.haploid.fa"
-#     shell:
-#         "cat {input} > {output}"
-
-# rule split_to_diploid:
-#     input:
-#         fa = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.grouped.fa",
-#         fai = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.grouped.fa.fai"
-#     output:
-#         h0 = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.haplotype0.fa",
-#         h1 = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.haplotype1.fa",
-#         h2 = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.haplotype2.fa"
-#     conda:
-#         "../envs/samtools.yaml"
-#     shell:
-#         """samtools faidx -r <(cat {input.fai} | cut -f 1 | grep \"_haplotype0\") {input.fa} > {output.h0} &&
-#            samtools faidx -r <(cat {input.fai} | cut -f 1 | grep \"_haplotype1\") {input.fa} > {output.h1} &&
-#            samtools faidx -r <(cat {input.fai} | cut -f 1 | grep \"_haplotype2\") {input.fa} > {output.h2}"""
-
-# rule filter_haplotype0:
-#     input:
-#         fa = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.grouped.fa",
-#         fai = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.grouped.fa.fai"
-#     output:
-#         fa = "regions/contigs/pooled.t{tip_max_size}.b{bubble_max_size}.d{degree_max_size}.polished.diploid.fa",
-#     conda:
-#         "../envs/samtools.yaml"
-#     shell:
-#         "samtools faidx -r <(cat {input.fai} | cut -f 1 | grep -v \"_haplotype0\") {input.fa} > {output.fa}"
 
 # rule map_contigs_to_bacs:
 #     input:

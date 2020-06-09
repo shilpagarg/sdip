@@ -20,7 +20,7 @@ all_segdup_regions = range(1, 487)
 #################################################
 
 #Range of regions in segdups.similar.tsv
-filtered_segdup_regions = range(1, 183)
+filtered_segdup_regions = range(1, 48)
 
 ##########################################################################################
 # 4. Finally execute the remainder of the pipeline.                                      #
@@ -31,7 +31,7 @@ filtered_segdup_regions = range(1, 183)
 #Range of big regions: should be initially empty, later insert regions that take too long to process
 big_regions = []
 #Range of regions with cycles: should be initially empty, later insert regions that have an empty .lemon graph in regions/gfas/pruned
-cycle_regions = [23, 38, 64, 140]
+cycle_regions = [20]
 #Range of duplicate regions: should be initially empty, later insert regions that are contained by other regions (use find_redundant_segdup_regions.sh)
 duplicate_regions = []
 # Range of regions that produce empty contigs
@@ -43,5 +43,5 @@ include: "workflow/rules/rules.smk"
 
 rule all:
     input:
-        "pipeline/eval/truvari_to_bacs/results.tools.png",
-        "pipeline/eval/truvari_to_ont/results.tools.png"
+        "pipeline/eval/truvari/results.tools.png",
+        "pipeline/eval/truvari_gt/results.tools.png"

@@ -1,6 +1,7 @@
 import sys
 import pysam
 import pandas as pd
+import numpy as np
 import argparse
 import networkx as nx
 from collections import Counter
@@ -8,11 +9,11 @@ from collections import Counter
 
 def form_graph(df, fasta_file, identity_cutoff, max_similarity):
     #Filter out duplicate contigs
-    identical_contigs = df.loc[(df["perID_by_all"] >= max_similarity) & (df["query_span"] / df["query_length"] > 0.95) & (df["reference_span"] / df["reference_length"] > 0.95) & (df["query_name"] < df["reference_name"]), ["query_name", "reference_name"]]
+    identical_contigs = df.loc[(df["perID_by_all"] >= max_similarity) & (df["query_span"] / df["query_length"] > 0.95) & (df["reference_span"] / df["reference_length"] > 0.95) & ((df["query_length"] < df["reference_length"]) | ((df["query_length"] == df["reference_length"]) & (df["query_name"] < df["reference_name"]))), ["query_name", "reference_name"]]
     duplicates = set([row["query_name"] for index, row in identical_contigs.iterrows()])
     contig_names = [contig for contig in fasta_file.references if contig not in duplicates]
     
-    similar_contigs = df.loc[(df["perID_by_all"] >= identity_cutoff) & (df["query_span"] / df["query_length"] > 0.5) & (df["reference_span"] / df["reference_length"] > 0.5) & ~(df["query_name"].isin(duplicates)) & ~(df["reference_name"].isin(duplicates)), ["query_name", "reference_name"]]
+    similar_contigs = df.loc[((df["matches"] / np.maximum(df["query_length"], df["reference_length"]) * 100) >= identity_cutoff) & (df["query_span"] / df["query_length"] > 0.5) & (df["reference_span"] / df["reference_length"] > 0.5) & ~(df["query_name"].isin(duplicates)) & ~(df["reference_name"].isin(duplicates)), ["query_name", "reference_name"]]
     
     #Build graph
     G = nx.Graph()
@@ -27,7 +28,7 @@ def main():
     parser.add_argument('contigs', type=str, help = 'Contigs in FASTA format')
     parser.add_argument('tbl', type=str, help = 'Table from samIdentities.py')
     parser.add_argument('region', type=int, help = 'Region number for FASTA sequence headers')
-    parser.add_argument('--min_similarity', '-m', type=float, default = 98.0, help = 'Minimum similarity cutoff for contig pairing (default: 98.0)')
+    parser.add_argument('--min_similarity', '-m', type=float, default = 70.0, help = 'Minimum similarity cutoff for contig pairing (default: 70.0)')
     parser.add_argument('--max_similarity', '-x', type=float, default = 99.9, help = 'Contigs more similar than this value are merged (default: 99.9)')
     parser.add_argument('--haploid', action='store_true', help = 'Organism is haploid')
     args = parser.parse_args()

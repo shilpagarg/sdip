@@ -1,7 +1,5 @@
-hg38: GCA_000001405.15_GRCh38_no_alt_analysis_set.fa
+hg38: data/genome/genome.simulated.no-n.fa
 
-pacbio: pacbio.reads.fastq
+pacbio: data/reads/sim.pooled.fastq
 
-nanopore: nanopore.reads.fastq.gz
-
-bacs: bacs.fa
+truth: data/svs/svs.simulated.sorted.vcf.gz
